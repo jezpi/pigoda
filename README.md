@@ -1,2 +1,2 @@
 # pigoda
-Weather station project
+Weather station project on Raspberry PI
