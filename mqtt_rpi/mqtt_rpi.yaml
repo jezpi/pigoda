@@ -1,0 +1,22 @@
+%YAML 1.1
+---
+# some variables
+# A list of tasty fruits
+pidfile: "/var/run/mqtt_rpi.pid"
+logfile: "/var/log/mqtt_rpi.log"
+debug: 4
+daemon: false
+mqtt_host: "172.17.17.4"
+mqtt_port: 1883
+mqtt_user: "jez"
+mqtt_password: 'dupa.8'
+mqtt_keepalive: 60
+# configuration of channels
+channels:
+        - name: "/guernika/network/broadcast"
+          on_message: "./script.sh"
+
+        - name:  "/guernika/environment/#"
+          on_message: nop
+
+...
