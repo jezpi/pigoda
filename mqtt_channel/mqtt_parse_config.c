@@ -101,15 +101,17 @@ parse_configfile(const char *path, mqtt_global_cfg_t *myconfig)
 	int		ret = 0;
 
 	if ((DEBUG_FLAG & 0xf)) {
-		if ((debuglog = fopen("./mqtt_debug.log", "w+")) != NULL) {
+		if ((debuglog = fopen("/var/log/mqtt_debug.log", "w+")) != NULL) {
 			fprintf(debuglog, "===> Debug log start\n");
 		} else {
 			debuglog = stderr;
 		}
-	}
+	} 
 
 	if ((inputf = fopen(path, "r")) == NULL) {
-		fprintf(debuglog, "file not found: \"%s\"\n", path);
+		if (DEBUG_FLAG & 0xf) {
+			fprintf(debuglog, "file not found: \"%s\"\n", path);
+		}
 		return (-1);
 	} else {
 		dprintf("%s()@ Parsing \"%s\"\n", __func__, path);
@@ -118,7 +120,9 @@ parse_configfile(const char *path, mqtt_global_cfg_t *myconfig)
 	yaml_parser_set_input_file(&parser, inputf);
 	do {
 		if (!yaml_parser_parse(&parser, &event)) {
-			fprintf(debuglog, "yaml_parser error!\n");
+			if (DEBUG_FLAG & 0xf) {
+				fprintf(debuglog, "yaml_parser error!\n");
+			}
 			/* XXX heap memmory leak */
 			return (-1);
 		}
