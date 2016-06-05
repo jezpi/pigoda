@@ -13,84 +13,6 @@ def fill_db_vc_temp(sqlitedb, offset):
 		except:
 			print "rrd failure!"
 
-
-
-def fill_db_pressure(sqlitedb, offset):
-	conn = sqlite3.connect(sqlitedb);
-	cur = conn.cursor();
-	cur.execute("SELECT * from pressure WHERE timestamp > ? ORDER BY timestamp", [str(offset)]);
-	for row in cur:
-		sup=str(row[0])+":"+str(row[1]);
-		print sup;
-		try:
-			rrdtool.update('pressure.rrd', sup);
-		except:
-			print "rrd failure!"
-
-
-def fill_db_tempin(sqlitedb, offset):
-	conn = sqlite3.connect(sqlitedb);
-	cur = conn.cursor();
-	win.insstr(1, 0, "hi");
-	win.refresh();
-	failures = 0;
-	qcounter = 0;
-	
-	cur.execute("SELECT * from temp_in WHERE timestamp > ? ORDER BY timestamp", [str(offset)]);
-	for row in cur:
-		qcounter = qcounter +1;
-		sup=str(row[0])+":"+str(row[1]);
-		win.addstr(1, 0,  sup+"    "+str(qcounter));
-		win.refresh();
-		try:
-			rrdtool.update('tempin.rrd', sup);
-		except:
-			failures=failures+1;
-			win.addstr(2, 0,  "failure "+str(failures));
-
-
-def fill_db_tempout(sqlitedb, offset):
-	conn = sqlite3.connect(sqlitedb);
-	cur = conn.cursor();
-	win.addstr(1, 0, "hi");
-	win.refresh();
-	failures = 0;
-	qcounter = 0;
-	
-	cur.execute("SELECT * from temp_out WHERE timestamp > ? ORDER BY timestamp", [str(offset)]);
-	for row in cur:
-		qcounter=qcounter+1;
-		sup=str(row[0])+":"+str(row[1]);
-		win.addstr(1, 6,  sup+"\t"+str(qcounter));
-		win.refresh();
-		try:
-			rrdtool.update('tempout.rrd', sup);
-		except:
-			failures=failures+1;
-			win.addstr(2, 0,  "failure "+str(failures));
-
-
-def fill_db_pir(sqlitedb, offset):
-	conn = sqlite3.connect(sqlitedb);
-	cur = conn.cursor();
-	win.addstr(1, 0, "hi");
-	win.refresh();
-	failures = 0;
-	qcounter = 0;
-	
-	cur.execute("SELECT * from pir WHERE timestamp > ? ORDER BY timestamp", [str(offset)]);
-	for row in cur:
-		qcounter=qcounter+1;
-		sup=str(row[0])+":"+str(row[1]);
-		win.addstr(1, 6,  sup+"\t"+str(qcounter));
-		win.refresh();
-		try:
-			rrdtool.update('pir.rrd', sup);
-		except:
-			failures=failures+1;
-			win.addstr(2, 0,  "failure "+str(failures));
-
-
 def fill_db(sqlitedb, query, rrdfile):
 	conn = sqlite3.connect(sqlitedb);
 	cur = conn.cursor();
@@ -118,8 +40,19 @@ def get_sqlite_offset(sqlitedb, table):
 	offset=cur.fetchone()[0];
 	return int(offset);
 
-off=get_sqlite_offset('/var/db/pigoda/sensors.db', 'pir');
-print off;
+
+def printoff(off):
+	return time.strftime("%c",time.gmtime(off))
+
+if len(sys.argv) > 1 :
+	if sys.argv[1] == "pir":
+		off=get_sqlite_offset('/var/db/pigoda/sensors.db', 'pir');
+		print printoff(off)+"  pir";
+else:
+	print "usage filldb.py [arg]"
+	sys.exit(64)
+
+
 sys.exit(0);
 curses.initscr();
 win = curses.newwin(0, 0);
