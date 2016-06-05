@@ -587,6 +587,7 @@ mqtt_rpi_init(const char *progname, char *conf)
 	if (parse_configfile(configfile, &myMQTT_conf) < 0) {
 		ret = false;
 		printf("Failed to parse config file \"%s\"\n", configfile);
+		return (false);
 	}
 
 
