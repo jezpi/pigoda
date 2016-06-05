@@ -13,7 +13,7 @@ typedef struct mqtt_global_config_t {
 	
 } mqtt_global_cfg_t;
 
-#define DEFAULT_CONFIG_FILE	"mqtt_rpi.yaml"
+#define DEFAULT_CONFIG_FILE	"/etc/mqtt_channel.yaml"
 #define HOST_NAME_MAX	64
 extern int parse_configfile(const char *, mqtt_global_cfg_t *);
 
