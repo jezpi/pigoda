@@ -15,7 +15,7 @@ echo "=> Creating png graph - pir"
 		--watermark="Date `date`" \
 		--alt-y-grid \
 		--rigid \
-		DEF:movm=pir.rrd:pir:AVERAGE \
+		DEF:movm=/var/db/rrdcache/pir.rrd:pir:AVERAGE \
 		VDEF:movmlast=movm,AVERAGE \
 		AREA:movm#0000FF:"Movement rate\n" \
 		LINE1:movmlast#FF00FF:"Average movement rate\n":dashes \
@@ -34,13 +34,14 @@ echo "=> Creating png graph - tempin"
 		--watermark="Date `date`" \
 		--alt-y-grid \
 		--rigid \
-		DEF:temp_in=tempin.rrd:tempin:AVERAGE \
+		DEF:temp_in=/var/db/rrdcache/tempin.rrd:tempin:AVERAGE \
 		VDEF:tempinlast=temp_in,LAST \
-		AREA:temp_in#0000FF:"temp(C)\n" \
-		LINE1:tempinlast#FF00FF:"temp(C)\n":dashes \
+		AREA:temp_in#0000FF:"temperature(C)\n" \
+		LINE1:tempinlast#FF00FF:"tempemperature last (C)\n":dashes \
 		GPRINT:temp_in:MAX:"Max\: %5.2lf\n" \
 		GPRINT:temp_in:AVERAGE:"Avg\: %5.2lf\n" \
-		GPRINT:temp_in:MIN:"Min\: %5.2lf\n" 
+		GPRINT:temp_in:MIN:"Min\: %5.2lf\n" \
+		GPRINT:temp_in:LAST:"Last\: %5.2lf\n" 
 }
 
 graph_tempin_weekly() {
@@ -54,7 +55,7 @@ echo "=> Creating png graph - tempin"
 		--watermark="Date `date`" \
 		--alt-y-grid \
 		--rigid \
-		DEF:temp_in=tempin.rrd:tempin:AVERAGE \
+		DEF:temp_in=/var/db/rrdcache/tempin.rrd:tempin:AVERAGE \
 		VDEF:tempinlast=temp_in,LAST \
 		AREA:temp_in#0000FF:"temp(C)\n" \
 		LINE1:tempinlast#FF00FF:"temp(C)\n":dashes \
@@ -74,8 +75,8 @@ graph_vc_temp() {
 		--watermark="Date `date`" \
 		--alt-y-grid \
 		--rigid \
-		DEF:vc_temp=temperature.rrd:vctemp:AVERAGE \
-		LINE1:vc_temp#D40000:"temp(C)" \
+		DEF:vc_temp=/var/db/rrdcache/vc_temp.rrd:vctemp:AVERAGE \
+		LINE1:vc_temp#D40000:"vc_temp(C)" \
 		GPRINT:vc_temp:MAX:"Max\: %5.2lf" \
 		GPRINT:vc_temp:AVERAGE:"Avg\: %5.2lf" \
 		GPRINT:vc_temp:MIN:"Min\: %5.2lf" \
@@ -90,35 +91,35 @@ graph_vc_temp() {
 graph_tempmix() {
 echo "=> Creating png graph - tempmix"
 rrdtool graph /var/www/pigoda/tempmix.png \
--w 785 -h 420 -a PNG \
---slope-mode \
---start now-46h --end now \
---font='DEFAULT:7:' \
---title="Relation temperature " \
---watermark="Date `date`" \
---lower-limit 15 \
---rigid \
-DEF:vc_temp=temperature.rrd:vctemp:AVERAGE \
-VDEF:vctemplast=vc_temp,LAST \
-DEF:temp_out=tempout.rrd:tempout:AVERAGE \
-VDEF:tempoutlast=temp_out,LAST \
-DEF:temp_in=tempin.rrd:tempin:AVERAGE \
-VDEF:tempinlast=temp_in,LAST \
-COMMENT:"Legend\:" \
-LINE2:vc_temp#D40000:"temp vc_core (C)" \
-LINE1:vctemplast#C837AB:"last temp (C)":dashes \
-GPRINT:vc_temp:MAX:"Max vc_core\: %5.2lf\n" \
-AREA:temp_in#FF00FF:"temp inside(C)" \
-GPRINT:temp_in:MAX:"Max inside\: %5.2lf\n" \
-GPRINT:temp_in:MIN:"Min inside\: %5.2lf\n"  \
-GPRINT:temp_in:LAST:"Last inside\: %5.2lf\n"  \
-AREA:temp_out#0080FF:"temp outside(C)\n" \
-LINE1:tempoutlast#FF6600:"temp outside last (C)\n" \
-LINE1:tempinlast#00CCFF:"temp inside last (C)\n" \
-GPRINT:temp_out:MAX:"Max outside\: %5.2lf\n"  \
-GPRINT:temp_out:MIN:"Min outside\: %5.2lf\n"  \
-GPRINT:temp_out:AVERAGE:"Avg outside\: %5.2lf\n" \
-GPRINT:temp_out:LAST:"Last outside\: %5.2lf\n" 
+	-w 785 -h 420 -a PNG \
+	--slope-mode \
+	--start now-46h --end now \
+	--font='DEFAULT:7:' \
+	--title="Relation temperature " \
+	--watermark="Date `date`" \
+	--lower-limit 15 \
+	--rigid \
+	DEF:vc_temp=/var/db/rrdcache/vc_temp.rrd:vctemp:AVERAGE \
+	VDEF:vctemplast=vc_temp,LAST \
+	DEF:temp_out=/var/db/rrdcache/tempout.rrd:tempout:AVERAGE \
+	VDEF:tempoutlast=temp_out,LAST \
+	DEF:temp_in=/var/db/rrdcache/tempin.rrd:tempin:AVERAGE \
+	VDEF:tempinlast=temp_in,LAST \
+	COMMENT:"Legend\:" \
+	LINE2:vc_temp#D40000:"temp vc_core (C)" \
+	LINE1:vctemplast#C837AB:"last temp (C)":dashes \
+	GPRINT:vc_temp:MAX:"Max vc_core\: %5.2lf\n" \
+	AREA:temp_in#FF00FF:"temp inside(C)" \
+	GPRINT:temp_in:MAX:"Max inside\: %5.2lf\n" \
+	GPRINT:temp_in:MIN:"Min inside\: %5.2lf\n"  \
+	GPRINT:temp_in:LAST:"Last inside\: %5.2lf\n"  \
+	AREA:temp_out#0080FF:"temp outside(C)\n" \
+	LINE1:tempoutlast#FF6600:"temp outside last (C)\n" \
+	LINE1:tempinlast#00CCFF:"temp inside last (C)\n" \
+	GPRINT:temp_out:MAX:"Max outside\: %5.2lf\n"  \
+	GPRINT:temp_out:MIN:"Min outside\: %5.2lf\n"  \
+	GPRINT:temp_out:AVERAGE:"Avg outside\: %5.2lf\n" \
+	GPRINT:temp_out:LAST:"Last outside\: %5.2lf\n" 
 
 }
 
@@ -126,21 +127,21 @@ GPRINT:temp_out:LAST:"Last outside\: %5.2lf\n"
 graph_vc_temp_daily () {
 echo "=> Creating png graph - vc_temp"
 rrdtool graph /var/www/pigoda/temperature_daily.png \
--w 785 -h 120 -a PNG \
---slope-mode \
---start 'now-1d' --end now \
---font='DEFAULT:7:' \
---title="vc_core temperature whole day" \
---watermark="Date `date`" \
---alt-y-grid \
---rigid \
-DEF:vc_temp=temperature.rrd:vctemp:AVERAGE \
-VDEF:vctempmax=vc_temp,MAXIMUM \
-AREA:vc_temp#D40000:"temp(C)\l" \
-LINE1:vctempmax#008000:"vc temp max(C)\l" \
-GPRINT:vc_temp:MAX:"Max\: %5.2lf\l" \
-GPRINT:vc_temp:MIN:"Min\: %5.2lf \l"  \
-GPRINT:vc_temp:LAST:"Last\: %5.2lf \l" 
+	-w 785 -h 120 -a PNG \
+	--slope-mode \
+	--start 'now-1d' --end now \
+	--font='DEFAULT:7:' \
+	--title="vc_core temperature whole day" \
+	--watermark="Date `date`" \
+	--alt-y-grid \
+	--rigid \
+	DEF:vc_temp=/var/db/rrdcache/vc_temp.rrd:vctemp:AVERAGE \
+	VDEF:vctempmax=vc_temp,MAXIMUM \
+	AREA:vc_temp#D40000:"temp(C)\l" \
+	LINE1:vctempmax#008000:"vc temp max(C)\l" \
+	GPRINT:vc_temp:MAX:"Max\: %5.2lf\l" \
+	GPRINT:vc_temp:MIN:"Min\: %5.2lf \l"  \
+	GPRINT:vc_temp:LAST:"Last\: %5.2lf \l" 
 }
 graph_vc_temp_pastdays () {
 	echo "=> Creating png graph - vc_temp past 3 days"
@@ -153,7 +154,7 @@ graph_vc_temp_pastdays () {
 		--watermark="Date `date`" \
 		--alt-y-grid \
 		--rigid \
-		DEF:vc_temp=temperature.rrd:vctemp:AVERAGE \
+		DEF:vc_temp=/var/db/rrdcache/vc_temp.rrd:vctemp:AVERAGE \
 		LINE1:vc_temp#FF00FF:"temp(C)" \
 		GPRINT:vc_temp:MAX:"Max\: %5.2lf" 
 
@@ -171,7 +172,7 @@ rrdtool graph /var/www/pigoda/light.png \
 	--watermark="Date `date`" \
 	--alt-y-grid \
 	--rigid \
-	DEF:light=light.rrd:light:AVERAGE \
+	DEF:light=/var/db/rrdcache/light.rrd:light:AVERAGE \
 	AREA:light#00FF00:"light \l" \
 	GPRINT:light:MAX:"Max\: %5.2lf\l" \
 	GPRINT:light:MIN:"Min\: %5.2lf \l" \
@@ -191,7 +192,7 @@ rrdtool graph /var/www/pigoda/light_weekly.png \
 	--watermark="Date `date`" \
 	--alt-y-grid \
 	--rigid \
-	DEF:light=light.rrd:light:AVERAGE \
+	DEF:light=/var/db/rrdcache/light.rrd:light:AVERAGE \
 	AREA:light#00FF00:"light \l" \
 	GPRINT:light:MAX:"Max\: %5.2lf\l" \
 	GPRINT:light:MIN:"Min\: %5.2lf \l" \
@@ -212,7 +213,7 @@ echo "=> Creating png graph - tempout"
 	--watermark="Date `date`" \
 	--alt-y-grid \
 	--rigid \
-	DEF:tempout=tempout.rrd:tempout:AVERAGE \
+	DEF:tempout=/var/db/rrdcache/tempout.rrd:tempout:AVERAGE \
 	AREA:tempout#EF500B:"temp(C)\n" \
 	GPRINT:tempout:MAX:" Max\: %5.2lf \n" \
 	GPRINT:tempout:AVERAGE:" Avg\: %5.2lf \n" \
@@ -231,8 +232,8 @@ rrdtool graph /var/www/pigoda/tempout_weekly.png \
 --watermark="Date `date`" \
 --alt-y-grid \
 --rigid \
-DEF:tempout=tempout.rrd:tempout:AVERAGE \
-AREA:tempout#EF500B:"temp(C)\n" \
+DEF:tempout=/var/db/rrdcache/tempout.rrd:tempout:AVERAGE \
+AREA:tempout#EF500B:"temperature(C)\n" \
 GPRINT:tempout:MAX:" Max\: %5.2lf \n" \
 GPRINT:tempout:AVERAGE:" Avg\: %5.2lf \n" \
 GPRINT:tempout:MIN:" Min\: %5.2lf\n" \
@@ -251,7 +252,7 @@ rrdtool graph /var/www/pigoda/pressure.png \
 --watermark="Date `date`" \
 --alt-y-grid \
 --rigid \
-DEF:pressure=pressure.rrd:pressure:AVERAGE \
+DEF:pressure=/var/db/rrdcache/pressure.rrd:pressure:AVERAGE \
 AREA:pressure#008000:"Pressure (hPa)" \
 GPRINT:pressure:MAX:"Max\: %5.2lf" \
 GPRINT:pressure:MIN:"Min\: %5.2lf" \
@@ -274,7 +275,7 @@ rrdtool graph /var/www/pigoda/pressure_daily.png \
 --upper-limit 1023 \
 --alt-y-grid \
 --rigid \
-DEF:pressure=pressure.rrd:pressure:AVERAGE \
+DEF:pressure=/var/db/rrdcache/pressure.rrd:pressure:AVERAGE \
 VDEF:pressuremax=pressure,MAXIMUM \
 VDEF:pressuremin=pressure,MINIMUM \
 AREA:pressure#008008:"Pressure (hPa)\n" \
