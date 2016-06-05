@@ -163,7 +163,7 @@ main(int argc, char **argv)
 		exit(3);
 
 	}
-	sqlitedb = MQTT_initdb("./sensors.db");
+	sqlitedb = MQTT_initdb("/var/db/pigoda/sensors.db");
 	
 	init_screen(&screen_data);
 	MQTT_sub(Mosquitto.mqh_mos, "/guernika/environment/#");
