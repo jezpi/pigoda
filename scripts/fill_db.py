@@ -118,7 +118,7 @@ def get_sqlite_offset(sqlitedb, table):
 	offset=cur.fetchone()[0];
 	return int(offset);
 
-off=get_sqlite_offset('/home/jez/code/MQTT/graph_channel/sensors.db', 'pir');
+off=get_sqlite_offset('/var/db/pigoda/sensors.db', 'pir');
 print off;
 sys.exit(0);
 curses.initscr();
