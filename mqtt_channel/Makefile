@@ -21,8 +21,8 @@ mqtt_parse_config.o: mqtt_parse_config.c
 mqtt_parser_test.o: mqtt_parser_test.c
 	$(CC) $(CFLAGS) -pipe -c $<  
 
-clean: mqtt_rpi.o mqtt_rpi
-	@rm -v *.o mqtt_rpi mqtt_channel
+clean: mqtt_channel.o mqtt_channel
+	@rm -v *.o mqtt_channel
 
 parser: mqtt_parse_config.o mqtt_parser_test.o
 	@ $(CC) $(CFLAGS) $+ -o $@ -lyaml 
@@ -30,8 +30,7 @@ parser: mqtt_parse_config.o mqtt_parser_test.o
 	@./parser
 
 
-test: mqttc parser
-	@echo "usage: [test|mqttc|parser|clean]"
-	@echo "Building: \""$+"\""
-	@echo "Building: \""$?"\""
-	@echo "Building: \""$*"\""
+
+install: mqtt_channel
+	install -m 755 -o root mqtt_channel /usr/bin/
+	install -m 644 -o root mqtt_channel.yaml /etc/
