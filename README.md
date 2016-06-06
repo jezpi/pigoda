@@ -15,7 +15,7 @@ a mosquitto server which broadcasts information on a configured channel.
 ### mqtt_rpi
 #### Introduction
 
-* mqtt_rpi is 
+mqtt_rpi is 
 #### Status:
 Ready to use version is available. However it's missing some documentation
 
@@ -26,7 +26,7 @@ git clone https://github.com/jezpi/pigoda
 cd mqtt_rpi
 make && make install
 
-* there are some dependencies like libyaml libmosquitto libsqlite3 and libbsd
+there are some dependencies like libyaml libmosquitto libsqlite3 and libbsd
 The application is located in /usr/bin/mqtt_rpi. It installs the configuration
 file placed in /etc/mqtt_rpi.yaml. The syntax is a YAML syntax. You need a MQTT
 server which defaults to 172.17.17.4, change it to Your server. You have to configure
@@ -38,16 +38,20 @@ daemon: true
 </code>
 
 ### mqtt_channel
-Ready to use version is available and there's no documentation 
+Ready to use/develop version is available and there's no documentation 
 
 Working version available
+
 ### mqtt_pir
 
-Wo
+Ready to use/develop version is available
+
 ### mqtt_rf
-Under development (PoF version already works and stores data into db, however
+Under development (Proof of concept version already works and stores data into db, however
 the code needs to be polished a bit)
 
 ## The hardware
 ### pinheader board
+In a directory eagle of github repository there are available boards designs ready to fabricate.
+The width of connections is thick on purpose. More information will be available soon.
 
