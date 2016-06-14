@@ -2,6 +2,8 @@
  *  $Id: mqtt_rpi.c,v 1.1 2015/05/31 22:41:24 jez Exp jez $
  */
 #include <sys/types.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 
 #include <err.h>
 #include <errno.h>
@@ -20,7 +22,6 @@
 #include <sqlite3.h>
 
 #include <bsd/libutil.h> /* pidfile_open(3) etc. */
-
 
 #include "mqtt.h"
 #include "mqtt_sensors.h" 
@@ -124,11 +125,15 @@ main(int argc, char **argv)
 	struct mosquitto *mosq;
 	bool first_run = true;
 	int mqloopret=0;
+	struct rlimit lim;
 	pid_t	procpid;
 
 	proc_command = false;
 	time(&Mosquitto.mqh_start_time);
 	myMQTT_conf.daemon = 0;
+	lim.rlim_cur = RLIM_INFINITY;
+	lim.rlim_max = RLIM_INFINITY;
+	setrlimit(RLIMIT_CORE, &lim);
 
 	if ((main_loop = mqtt_rpi_init(argv[0], argv[1])) == false) {
 		fprintf(stderr, "%s: failed to init\n", __PROGNAME);
