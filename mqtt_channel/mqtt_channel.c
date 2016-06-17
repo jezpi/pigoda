@@ -333,6 +333,8 @@ mqtt_proc_msg(char *topic, char *payload)
 					cmd_hint = CMD_HUMIDITY;
 				} else if (pstate == ST_SENSOR && !strcasecmp(topics[n], "pir")) {
 					cmd_hint = CMD_PIR;
+				} else if (pstate == ST_SENSOR && !strcasecmp(topics[n], "mq-2")) {
+					cmd_hint = CMD_MQ2;
 				} else {
 					curcmd = CMD_ERR;
 				}
@@ -458,6 +460,17 @@ my_message_callback(struct mosquitto *mosq, void *userdata, const struct mosquit
 				screen_data.pir = pir;
 
 				if (MQTT_store(sqlitedb, T_PIR, pir) != 0) {
+					MQTT_log("Store failure\n");
+					screen_data.err_sqlite[STAT_SQLITE_PIR]++;
+				} else {
+					screen_data.store_sqlite[STAT_SQLITE_PIR]++;
+				}
+				break;
+			case CMD_MQ2:
+				pir = atof(msg->payload);
+				screen_data.pir = pir;
+
+				if (MQTT_store(sqlitedb, T_MQ2, pir) != 0) {
 					MQTT_log("Store failure\n");
 					screen_data.err_sqlite[STAT_SQLITE_PIR]++;
 				} else {
