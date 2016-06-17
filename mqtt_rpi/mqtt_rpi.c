@@ -123,10 +123,11 @@ main(int argc, char **argv)
 {
 	char *bufp;
 	struct mosquitto *mosq;
-	bool first_run = true;
 	int mqloopret=0;
 	struct rlimit lim;
 	pid_t	procpid;
+	bool first_run = true;
+	bool do_pool_sensors = true;
 
 	proc_command = false;
 	time(&Mosquitto.mqh_start_time);
@@ -147,30 +148,48 @@ main(int argc, char **argv)
 	}
 	if (myMQTT_conf.daemon) {
 		daemon(1, 0);
+		MQTT_log("Daemonizing!\n");
+	} else {
+		MQTT_log("Staying in foreground!\n");
 	}
 	pidfile_write(mr_pidfile);
 		
-	if ((mosq = MQTT_init(&Mosquitto, false, __PROGNAME)) == NULL) {
-		fprintf(stderr, "%s: failed to init MQTT protocol \n", __PROGNAME);
-		MQTT_log("%s: failed to init MQTT protocol \n", __PROGNAME);
-		exit(3);
-
-	}
 	MQTT_log("Sensors init");
 	sensors_init(); /* wiringPiSetup() */
 	MQTT_log("Led act init");
-	startup_led_act();
+	startup_led_act(100); /*  XXX ugly hack
+				 it has a magic number which is just to wait until
+				 the NIC settles up, it takes a while and i preassume
+				 that inmediate data acquisition after reboot is not
+				 so critical. It is obviously relative and a workaround.
+				 */
 	MQTT_log("bmp85 init");
 	bmp85_init();
 
+	startup_fanctl();
+	if ((mosq = MQTT_init(&Mosquitto, false, __PROGNAME)) == NULL) {
+		fprintf(stderr, "%s: failed to init MQTT protocol \n", __PROGNAME);
+		MQTT_log("%s: failed to init MQTT protocol \n", __PROGNAME);
+
+		pidfile_remove(mr_pidfile);
+		fclose(logfile);
+		fanctl(FAN_OFF, NULL);
+		term_led_act(1);/* value 1 indicates failure */
+		exit(3);
+
+	}
 	MQTT_log("Subscribe to /guernika/%s/cmd/#", __HOSTNAME);
 	MQTT_sub(Mosquitto.mqh_mos, "/guernika/%s/cmd/#", __HOSTNAME);
 	MQTT_log("FAN act init");
-	startup_fanctl();
 
 	while (main_loop) {
 		/* -1 = 1000ms /  0 = instant return */
 		while((mqloopret = MQTT_loop(mosq, 0)) != MOSQ_ERR_SUCCESS) {
+			if (mqloopret == MOSQ_ERR_CONN_LOST || mqloopret == MOSQ_ERR_NO_CONN) {
+				main_loop=false;
+				do_pool_sensors = false;
+				break;
+			}
 			if (first_run) {
 				MQTT_pub(mosq, "/guernika/network/broadcast/mqtt_rpi", true, "on");
 				first_run = false;
@@ -192,7 +211,12 @@ main(int argc, char **argv)
 			proc_command = false;
 			MQTT_pub(mosq, "/guernika/network/broadcast", false, "%lu", Mosquitto.mqh_start_time);
 		}
-		pool_sensors(mosq);
+		if (do_pool_sensors) {
+#include <wiringPi.h>
+			flash_led(GREEN_LED, HIGH);
+			pool_sensors(mosq);
+			flash_led(GREEN_LED, LOW);
+		}
 
 	  	usleep(1055000);
 	}
@@ -201,7 +225,7 @@ main(int argc, char **argv)
 	pidfile_remove(mr_pidfile);
 	fclose(logfile);
 	fanctl(FAN_OFF, NULL);
-	term_led_act();
+	term_led_act(0);
 	return (0);
 }
 
@@ -428,6 +452,7 @@ MQTT_init(mqtt_hnd_t *m, bool c_sess, const char *id)
 	int lv_minor;
 	int lv_major;
 	int lv_rev;
+	int mosq_ret;
 
 	mosquitto_lib_init();
 	mosquitto_lib_version(&lv_major, &lv_minor, &lv_rev);
@@ -442,9 +467,13 @@ MQTT_init(mqtt_hnd_t *m, bool c_sess, const char *id)
 	mosquitto_username_pw_set(m->mqh_mos, NULL, NULL);
 
 	register_callbacks(m->mqh_mos);
-	if (mosquitto_connect(m->mqh_mos, myMQTT_conf.mqtt_host, myMQTT_conf.mqtt_port, 60) != MOSQ_ERR_SUCCESS)
-		return (NULL);
-	return (m->mqh_mos);
+	
+	if ((mosq_ret = mosquitto_connect(m->mqh_mos, myMQTT_conf.mqtt_host, myMQTT_conf.mqtt_port, 600)) == MOSQ_ERR_SUCCESS) {
+		return (m->mqh_mos);
+	} else {
+		MQTT_log( "MQTT connect failure! %d %s\n", mosq_ret, strerror(errno));
+	}
+	return (NULL);
 }
 
 static void
@@ -519,7 +548,8 @@ mqtt_rpi_init(const char *progname, char *conf)
 	configfile = ((conf != NULL)?conf:DEFAULT_CONFIG_FILE);
 	if (parse_configfile(configfile, &myMQTT_conf) < 0) {
 		ret = false;
-		printf("Failed to parse config file \"%s\"\n", configfile);
+		fprintf(stderr, "Failed to parse config file \"%s\"\n", configfile);
+		return (false);
 	}
 
 
@@ -529,7 +559,7 @@ mqtt_rpi_init(const char *progname, char *conf)
 	signal(SIGINT, sig_hnd);
 	if (sigaction(SIGINT, &sa, NULL) == -1) {
 		ret = false;
-		printf("%s@sigaction() \"%s\"\n", __PROGNAME, configfile);
+		fprintf(stderr, "%s@sigaction() \"%s\"\n", __PROGNAME, configfile);
 	}
 	signal(SIGQUIT, sig_hnd);
 	signal(SIGUSR1, sig_hnd);
