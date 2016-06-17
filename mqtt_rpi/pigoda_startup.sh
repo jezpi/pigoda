@@ -14,6 +14,8 @@
 #  
 ### END INIT INFO
 
+DAEMON_NAME="mqtt_rpi"
+PIDFILE="/var/run/${DAEMON_NAME}.pid"
 #/usr/bin/gpio export 27 output
 if [ ! -d '/sys/class/gpio/gpio18' ];then
 	/usr/bin/gpio export 18 output
@@ -27,10 +29,23 @@ case $1 in
 		#echo 1 > $gpiop
 		;;
 	stop)
-		kill `head -1 /var/run/mqtt_rpi.pid`
+		kill `head -1 ${PIDFILE}`
 		#echo 0 > $gpiop
 		;;
+	status)
+		if [ -f ${PIDFILE} ]; then
+			mqtt_rpi_pid=`head -1 ${PIDFILE}`;
+			if kill -0 $mqtt_rpi_pid > /dev/null 2>&1; then
+				echo "${DAEMON_NAME} is running with pid $mqtt_rpi_pid"
+			else
+				echo "Stale pidfile \"$PIDFILE\""
+			fi
+		else
+			echo "pidfile not found. mqtt_rpi is not working"
+			exit 1;
+		fi
+		;;
 	*)
-		echo "usage: $0 [start|stop]"
+		echo "usage: $0 [start|stop|status]"
 		exit 64
 esac
