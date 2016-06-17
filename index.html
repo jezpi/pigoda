@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="UTF-8">
+    <title>Pigoda by jezpi</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="stylesheets/normalize.css" media="screen">
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/github-light.css" media="screen">
+  </head>
+  <body>
+    <section class="page-header">
+      <h1 class="project-name">Pigoda</h1>
+      <h2 class="project-tagline">Weather station project</h2>
+      <a href="https://github.com/jezpi/pigoda" class="btn">View on GitHub</a>
+      <a href="https://github.com/jezpi/pigoda/zipball/master" class="btn">Download .zip</a>
+      <a href="https://github.com/jezpi/pigoda/tarball/master" class="btn">Download .tar.gz</a>
+    </section>
+
+    <section class="main-content">
+      <h1>
+<a id="pigoda---introduction" class="anchor" href="#pigoda---introduction" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>pigoda - Introduction</h1>
+
+<p>Sensing station project on Raspberry Pi. The project is divided into
+software (i.e. mqtt_rpi, mqtt_channel, and rrdtool handling scripts) and
+hardware - boards design as well as design of 3D printed pieces (n/a yet).</p>
+
+<p>The version available on github still have lots of defaults from my
+personal lab. <em>IT IS NOT RECOMMENDED TO RUN IT WITHOUT LOOKING INTO
+THE SOURCE CODE AND CONFIGURATION FILE</em></p>
+
+<h2>
+<a id="the-software" class="anchor" href="#the-software" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>The software</h2>
+
+<p>The standard installation assumes that You have two machines, one is a 
+raspberry pi which sensors connected to specified pins and second is
+a mosquitto server which broadcasts information on a configured channel.</p>
+
+<h3>
+<a id="mqtt_rpi" class="anchor" href="#mqtt_rpi" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>mqtt_rpi</h3>
+
+<h4>
+<a id="introduction" class="anchor" href="#introduction" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Introduction</h4>
+
+<p>mqtt_rpi is </p>
+
+<h4>
+<a id="status" class="anchor" href="#status" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Status:</h4>
+
+<p>Ready to use version is available. However it's missing some documentation</p>
+
+<h4>
+<a id="how-to-use-it" class="anchor" href="#how-to-use-it" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>How to use it?</h4>
+
+<p>Download the source repository, compile* the sources and install it:</p>
+
+<p>git clone <a href="https://github.com/jezpi/pigoda">https://github.com/jezpi/pigoda</a>
+cd mqtt_rpi
+make &amp;&amp; make install</p>
+
+<p>there are some dependencies like libyaml libmosquitto libsqlite3 and libbsd
+The application is located in /usr/bin/mqtt_rpi. It installs the configuration
+file placed in /etc/mqtt_rpi.yaml. The syntax is a YAML syntax. You need a MQTT
+server which defaults to 172.17.17.4, change it to Your server. You have to configure
+daemon mode in /etc/mqtt_rpi.yaml ( <em>mqtt_rpi</em> does not detach from terminal by default and it prints loads
+of debug messages) like this:</p>
+
+<p><code>
+daemon: true
+</code></p>
+
+<h3>
+<a id="mqtt_channel" class="anchor" href="#mqtt_channel" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>mqtt_channel</h3>
+
+<p>Ready to use/develop version is available and there's no documentation </p>
+
+<p>Working version available</p>
+
+<h3>
+<a id="mqtt_pir" class="anchor" href="#mqtt_pir" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>mqtt_pir</h3>
+
+<p>Ready to use/develop version is available</p>
+
+<h3>
+<a id="mqtt_rf" class="anchor" href="#mqtt_rf" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>mqtt_rf</h3>
+
+<p>Under development (Proof of concept version already works and stores data into db, however
+the code needs to be polished a bit)</p>
+
+<h2>
+<a id="the-hardware" class="anchor" href="#the-hardware" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>The hardware</h2>
+
+<h3>
+<a id="pinheader-board" class="anchor" href="#pinheader-board" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>pinheader board</h3>
+
+<p>In a directory eagle of github repository there are available boards designs ready to fabricate.
+The width of connections is thick on purpose. More information will be available soon.</p>
+
+<ul>
+<li>[x] <a href="https://help.github.com/articles/basic-writing-and-formatting-syntax/#mentioning-users-and-teams" class="user-mention">@mentions</a>, #refs, <a href="">links</a>, <strong>formatting</strong>, and <del>tags</del> supported</li>
+<li>[x] list syntax required (any unordered or ordered list supported)</li>
+<li>[x] this is a complete item</li>
+<li>[ ] this is an incomplete item</li>
+</ul>
+
+      <footer class="site-footer">
+        <span class="site-footer-owner"><a href="https://github.com/jezpi/pigoda">Pigoda</a> is maintained by <a href="https://github.com/jezpi">jezpi</a>.</span>
+
+        <span class="site-footer-credits">This page was generated by <a href="https://pages.github.com">GitHub Pages</a> using the <a href="https://github.com/jasonlong/cayman-theme">Cayman theme</a> by <a href="https://twitter.com/jasonlong">Jason Long</a>.</span>
+      </footer>
+
+    </section>
+
+  
+  </body>
+</html>
