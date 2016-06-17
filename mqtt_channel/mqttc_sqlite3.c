@@ -84,6 +84,18 @@ MQTT_store(MQTT_db_t *mq_db, MQTT_data_type_t type, float value)
 				sqlite3_free(sqliteErrMsg);
 			}
 		break;
+		case T_MQ2:
+			snprintf(sql_buf, sizeof(sql_buf), "CREATE TABLE IF NOT EXISTS %s;", "mq2");
+			ret = sqlite3_exec(mq_db->Mdb_hnd, sql_buf, NULL, 0, &sqliteErrMsg );
+			if (ret != SQLITE_OK) {
+			}
+			snprintf(sql_buf, sizeof(sql_buf), "INSERT INTO %s VALUES (%d, %f);", "mq2", curtim, value) ;
+			ret = sqlite3_exec(mq_db->Mdb_hnd, sql_buf, NULL, 0, &sqliteErrMsg );
+			if (ret != SQLITE_OK) {
+				MQTT_log("Sqlite err while storing pir: %s  ", sqliteErrMsg);
+				sqlite3_free(sqliteErrMsg);
+			}
+		break;
 		default:
 			MQTT_log("SQLITE3: Unknown type %d\n", type);
 			break;
