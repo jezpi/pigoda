@@ -55,14 +55,44 @@ a mosquitto server which broadcasts information on a configured channel.</p>
 <tr>
 <th>Part</th>
 <th>Task</th>
-<th>Status</th>
+<th>Priority</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>mqtt_rpi, mqtt_channel</td>
 <td>Reconnecting on MQTT error</td>
-<td>TODO</td>
+<td>High</td>
+</tr>
+<tr>
+<td>mqtt_pir, mqtt_rf</td>
+<td>Both need to integrate with mqtt_rpi</td>
+<td>High</td>
+</tr>
+<tr>
+<td>new pigoda v2 board</td>
+<td>redesign, include more gpio protection (with optocoupler and or overcurrent protection)</td>
+<td>design ongoing</td>
+</tr>
+<tr>
+<td>website</td>
+<td>has to be done</td>
+<td>High</td>
+</tr>
+<tr>
+<td>mqtt_channel</td>
+<td>Change database engine to MySQL from Sqlite3</td>
+<td>Medium</td>
+</tr>
+<tr>
+<td>mqtt_channel</td>
+<td>code checkout</td>
+<td>Low</td>
+</tr>
+<tr>
+<td>3D models</td>
+<td>Models for boxes used to isolate sensors etc.</td>
+<td>Low</td>
 </tr>
 </tbody>
 </table>
@@ -70,22 +100,29 @@ a mosquitto server which broadcasts information on a configured channel.</p>
 <h3>
 <a id="how-it-really-works" class="anchor" href="#how-it-really-works" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>How it really works?!</h3>
 
-<p><img src="https://jezpi.github.io/pigoda/pigoda_howto.svg" alt="graph how it works">
-<img src="https://jezpi.github.io/pigoda/pigoda_howto.svg" alt="graph"></p>
+<p><img src="https://jezpi.github.io/pigoda/pigoda_howto.svg" alt="graph"></p>
 
 <p><strong>The basic knowledge about MQTT protocol is required</strong>
-** More info on <a href="https://github.com/mqtt/mqtt.github.io/wiki">https://github.com/mqtt/mqtt.github.io/wiki</a> **
-There are 3 applications:
-mqtt_rpi - which gets the data from sensors, process it, and publish on MQTT channel</p>
+<strong>More info on <a href="https://github.com/mqtt/mqtt.github.io/wiki">https://github.com/mqtt/mqtt.github.io/wiki</a></strong></p>
+
+<p>There are 4 applications:</p>
+
+<ul>
+<li>mqtt_rpi - Gets the data from sensors, process it, and publish on <em>MQTT</em> channel.</li>
+<li>mqtt_channel -  Listens on a given channel and stores the obtained data to Sqlite3 database.</li>
+<li>mqtt_pir - Gets statistics from pir sensor and publish it on a given <em>MQTT</em> channel.</li>
+<li>mqtt_rf - Gets statistics from  nRF24+ and pushish it on a given <em>MQTT</em> channel.</li>
+</ul>
 
 <h4>
 <a id="how-to-use-it" class="anchor" href="#how-to-use-it" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>How to use it?</h4>
 
 <p>Download the source repository, compile* the sources and install it:</p>
 
-<p>git clone <a href="https://github.com/jezpi/pigoda">https://github.com/jezpi/pigoda</a>
+<pre><code>git clone https://github.com/jezpi/pigoda
 cd mqtt_rpi
-make &amp;&amp; make install</p>
+make &amp;&amp; make install
+</code></pre>
 
 <p>there are some dependencies like libyaml libmosquitto libsqlite3 and libbsd
 The application is located in /usr/bin/mqtt_rpi. It installs the configuration
