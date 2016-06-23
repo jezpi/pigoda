@@ -19,6 +19,20 @@ mqtt_rpi is
 #### Status:
 Ready to use version is available. However it's missing some documentation
 
+Part | Task |  Status
+-----|------|--------
+mqtt_rpi, mqtt_channel|Reconnecting on MQTT error | TODO
+
+### How it really works?!
+
+![graph](https://jezpi.github.io/pigoda/pigoda_howto.svg)
+
+**The basic knowledge about MQTT protocol is required**
+** More info on https://github.com/mqtt/mqtt.github.io/wiki **
+There are 3 applications:
+mqtt_rpi - which gets the data from sensors, process it, and publish on MQTT channel
+
+
 #### How to use it?
 Download the source repository, compile* the sources and install it:
 
@@ -50,8 +64,12 @@ Ready to use/develop version is available
 Under development (Proof of concept version already works and stores data into db, however
 the code needs to be polished a bit)
 
+
+
+
 ## The hardware
 ### pinheader board
 In a directory eagle of github repository there are available boards designs ready to fabricate.
 The width of connections is thick on purpose. More information will be available soon.
+
 
