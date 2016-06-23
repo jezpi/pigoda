@@ -22,23 +22,35 @@ Ready to use version is available. However it's missing some documentation
 Part | Task |  Status
 -----|------|--------
 mqtt_rpi, mqtt_channel|Reconnecting on MQTT error | TODO
+mqtt_pir, mqtt_rf | Both need to integrate with mqtt_rpi | TODO
+mqtt_channel | code checkout | TODO
+new pigoda v2 board | redesign, include more gpio protection (with optocoupler and or overcurrent protection)| design ongoing
+website | has to be done | TODO
+mqtt_channel | Change database engine to MySQL from Sqlite3 | TODO
 
 ### How it really works?!
 
 ![graph](https://jezpi.github.io/pigoda/pigoda_howto.svg)
 
 **The basic knowledge about MQTT protocol is required**
-** More info on https://github.com/mqtt/mqtt.github.io/wiki **
-There are 3 applications:
-mqtt_rpi - which gets the data from sensors, process it, and publish on MQTT channel
 
+** More info on https://github.com/mqtt/mqtt.github.io/wiki **
+
+There are 3 applications:
+
+* mqtt_rpi - Gets the data from sensors, process it, and publish on _MQTT_ channel.
+* mqtt_channel -  Listens on a given channel and stores the obtained data to Sqlite3 database.
+* mqtt_pi - Gets statistics from pir sensor and publish it on a given _MQTT_ channel.
+* mqtt_rf - Gets statistics from  nRF24+ and pushish it on a given _MQTT_ channel.
 
 #### How to use it?
 Download the source repository, compile* the sources and install it:
 
+```
 git clone https://github.com/jezpi/pigoda
 cd mqtt_rpi
 make && make install
+```
 
 there are some dependencies like libyaml libmosquitto libsqlite3 and libbsd
 The application is located in /usr/bin/mqtt_rpi. It installs the configuration
