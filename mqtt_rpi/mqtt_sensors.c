@@ -54,7 +54,6 @@ static char *getraw(const char *devpath)
 	char	*tempstr = NULL;
 
 	if ((f = fopen(devpath, "r")) == NULL) {
-		fclose(f);
 		return (NULL);
 	}
 
