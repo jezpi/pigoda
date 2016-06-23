@@ -64,15 +64,15 @@ startup_led_act(int ledticks)
 	for (n = 0; n < ledticks; n++ ) {
 		if (ticktack) { 
 			digitalWrite(green_led_pin, LOW);
-			delay(200);
+			delay(300);
 			digitalWrite(green_led_pin, HIGH);
-			delay(200);
+			delay(100);
 			ticktack = 0;
 		} else {
 			digitalWrite(0, LOW);
-			delay(200);
+			delay(300);
 			digitalWrite(0, HIGH);
-			delay(200);
+			delay(100);
 			ticktack = 1;
 		}
 
