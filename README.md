@@ -19,28 +19,28 @@ mqtt_rpi is
 #### Status:
 Ready to use version is available. However it's missing some documentation
 
-Part | Task |  Status
+Part | Task |  Priority
 -----|------|--------
-mqtt_rpi, mqtt_channel|Reconnecting on MQTT error | TODO
-mqtt_pir, mqtt_rf | Both need to integrate with mqtt_rpi | TODO
-mqtt_channel | code checkout | TODO
+mqtt_rpi, mqtt_channel|Reconnecting on MQTT error | High 
+mqtt_pir, mqtt_rf | Both need to integrate with mqtt_rpi | High
 new pigoda v2 board | redesign, include more gpio protection (with optocoupler and or overcurrent protection)| design ongoing
-website | has to be done | TODO
-mqtt_channel | Change database engine to MySQL from Sqlite3 | TODO
+website | has to be done | High
+mqtt_channel | Change database engine to MySQL from Sqlite3 | Medium
+mqtt_channel | code checkout | Low
+3D models | Models for boxes used to isolate sensors etc. | Low 
 
 ### How it really works?!
 
 ![graph](https://jezpi.github.io/pigoda/pigoda_howto.svg)
 
 **The basic knowledge about MQTT protocol is required**
+**More info on https://github.com/mqtt/mqtt.github.io/wiki**
 
-** More info on https://github.com/mqtt/mqtt.github.io/wiki **
-
-There are 3 applications:
+There are 4 applications:
 
 * mqtt_rpi - Gets the data from sensors, process it, and publish on _MQTT_ channel.
 * mqtt_channel -  Listens on a given channel and stores the obtained data to Sqlite3 database.
-* mqtt_pi - Gets statistics from pir sensor and publish it on a given _MQTT_ channel.
+* mqtt_pir - Gets statistics from pir sensor and publish it on a given _MQTT_ channel.
 * mqtt_rf - Gets statistics from  nRF24+ and pushish it on a given _MQTT_ channel.
 
 #### How to use it?
