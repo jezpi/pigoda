@@ -29,7 +29,11 @@ case $1 in
 		#echo 1 > $gpiop
 		;;
 	stop)
-		kill `head -1 ${PIDFILE}`
+		if [ -f ${PIDFILE} ]; then
+			kill `head -1 ${PIDFILE}`
+		else
+			echo "Daemon $DAEMON_NAME is not running! (PIDfile not found)"
+		fi
 		#echo 0 > $gpiop
 		;;
 	status)
