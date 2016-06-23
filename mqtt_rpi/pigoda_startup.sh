@@ -28,6 +28,17 @@ case $1 in
 		/usr/bin/mqtt_rpi /etc/mqtt_rpi.yaml
 		#echo 1 > $gpiop
 		;;
+	restart)
+		if [ -f ${PIDFILE} ]; then
+			kill `head -1 ${PIDFILE}`
+		else
+			echo "Daemon $DAEMON_NAME is not running! (PIDfile not found)"
+		fi
+		echo "=> Sleeping 60 secs before restart"
+		sleep 60
+		/usr/bin/${DAEMON_NAME} /etc/mqtt_rpi.yaml
+		
+		;;
 	stop)
 		if [ -f ${PIDFILE} ]; then
 			kill `head -1 ${PIDFILE}`
