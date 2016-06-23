@@ -22,6 +22,7 @@
 #include <sqlite3.h>
 
 #include <bsd/libutil.h> /* pidfile_open(3) etc. */
+#include <wiringPi.h> /* defs of HIGH and LOW */
 
 #include "mqtt.h"
 #include "mqtt_sensors.h" 
@@ -83,6 +84,7 @@ static volatile bool main_loop;
 static sig_atomic_t unknown_signal;
 static sig_atomic_t got_SIGUSR1;
 static sig_atomic_t got_SIGTERM;
+static unsigned short failure;
 
 
 static void my_publish_callback(struct mosquitto *, void *, int);
@@ -188,6 +190,7 @@ main(int argc, char **argv)
 			if (mqloopret == MOSQ_ERR_CONN_LOST || mqloopret == MOSQ_ERR_NO_CONN) {
 				main_loop=false;
 				do_pool_sensors = false;
+				failure = 1;
 				break;
 			}
 			if (first_run) {
@@ -212,9 +215,12 @@ main(int argc, char **argv)
 			MQTT_pub(mosq, "/guernika/network/broadcast", false, "%lu", Mosquitto.mqh_start_time);
 		}
 		if (do_pool_sensors) {
-#include <wiringPi.h>
 			flash_led(GREEN_LED, HIGH);
-			pool_sensors(mosq);
+			if (pool_sensors(mosq) == -1) {
+				flash_led(RED_LED, HIGH);
+				do_pool_sensors = false;
+				MQTT_log("failed to pool sensors. Pooling disabled\n");
+			}
 			flash_led(GREEN_LED, LOW);
 		}
 
@@ -225,7 +231,7 @@ main(int argc, char **argv)
 	pidfile_remove(mr_pidfile);
 	fclose(logfile);
 	fanctl(FAN_OFF, NULL);
-	term_led_act(0);
+	term_led_act(failure);
 	return (0);
 }
 
@@ -579,23 +585,48 @@ mqtt_rpi_init(const char *progname, char *conf)
 }
 
 
-
+/*
+ * returns -1 on fail, 0 on success
+ */
 static int 
 pool_sensors(struct mosquitto *mosq)
 {
+	int ret = 0;
 	int light;
 	float temp_in=0, temp_out = 0;
 	double pressure=0;
 
 	light = pcf8591p_ain(0);
-	MQTT_pub(mosq, "/guernika/environment/light", true, "%d", light);
+	if (MQTT_pub(mosq, "/guernika/environment/light", true, "%d", light) == -1) {
+		MQTT_log("Failed to publish light\n");
+		return (-1);
+	}
 
-	if ((temp_in = get_temperature("28-0000055a8be7")) != -1)
-		MQTT_pub(mosq, "/guernika/environment/tempin", true, "%f", temp_in);
-	if ((temp_out = get_temperature("28-000005d3355e")) != -1)
-		MQTT_pub(mosq, "/guernika/environment/tempout", true, "%f", temp_out);
+	if ((temp_in = get_temperature("28-0000055a8be7")) != -1) {
+		if (MQTT_pub(mosq, "/guernika/environment/tempin", true, "%f", temp_in) == -1) {
+			MQTT_log("Failed to publish tempin\n");
+			return (-1);
+		}
+	} else {
+		MQTT_log("Failed to get tempin\n");
+		ret = -1;
+	}
+	if ((temp_out = get_temperature("28-000005d3355e")) != -1) {
+		if (MQTT_pub(mosq, "/guernika/environment/tempout", true, "%f", temp_out) == -1) {
+			MQTT_log("Failed to publish tempout\n");
+			return (-1);
+		}
+	} else {
+		MQTT_log("Failed to get tempout: %s\n", strerror(errno));
+		ret = -1;
+	}
+
 	pressure=get_pressure();
-	MQTT_pub(mosq, "/guernika/environment/pressure", true, "%0.2f", pressure);
+	if (MQTT_pub(mosq, "/guernika/environment/pressure", true, "%0.2f", pressure) == -1) {
+		MQTT_log("Failed to publish pressure\n");
+		ret = -1;
+	}
+	return (ret);
 }
 
 
