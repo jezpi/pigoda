@@ -19,12 +19,38 @@ mqtt_rpi is
 #### Status:
 Ready to use version is available. However it's missing some documentation
 
+Part | Task |  Priority
+-----|------|--------
+mqtt_rpi, mqtt_channel|Reconnecting on MQTT error | High 
+mqtt_pir, mqtt_rf | Both need to integrate with mqtt_rpi | High
+new pigoda v2 board | redesign, include more gpio protection (with optocoupler and or overcurrent protection)| design ongoing
+website | has to be done | High
+mqtt_channel | Change database engine to MySQL from Sqlite3 | Medium
+mqtt_channel | code checkout | Low
+3D models | Models for boxes used to isolate sensors etc. | Low 
+
+### How it really works?!
+
+![graph](https://jezpi.github.io/pigoda/pigoda_howto.svg)
+
+**The basic knowledge about MQTT protocol is required**
+**More info on https://github.com/mqtt/mqtt.github.io/wiki**
+
+There are 4 applications:
+
+* mqtt_rpi - Gets the data from sensors, process it, and publish on _MQTT_ channel.
+* mqtt_channel -  Listens on a given channel and stores the obtained data to Sqlite3 database.
+* mqtt_pir - Gets statistics from pir sensor and publish it on a given _MQTT_ channel.
+* mqtt_rf - Gets statistics from  nRF24+ and pushish it on a given _MQTT_ channel.
+
 #### How to use it?
 Download the source repository, compile* the sources and install it:
 
+```
 git clone https://github.com/jezpi/pigoda
 cd mqtt_rpi
 make && make install
+```
 
 there are some dependencies like libyaml libmosquitto libsqlite3 and libbsd
 The application is located in /usr/bin/mqtt_rpi. It installs the configuration
@@ -50,8 +76,12 @@ Ready to use/develop version is available
 Under development (Proof of concept version already works and stores data into db, however
 the code needs to be polished a bit)
 
+
+
+
 ## The hardware
 ### pinheader board
 In a directory eagle of github repository there are available boards designs ready to fabricate.
 The width of connections is thick on purpose. More information will be available soon.
+
 
