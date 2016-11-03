@@ -26,7 +26,7 @@ main(int argc, char **argv)
 	}
 	mosquitto_lib_init();
 	m= mosquitto_new("pir_sensors", true, NULL);
-	mosquitto_connect(m, "172.17.17.4", 1883, 300);
+	mosquitto_connect(m, "172.17.17.1", 1883, 300);
          	
 	wiringPiSetup();
 
