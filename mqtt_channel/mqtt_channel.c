@@ -25,6 +25,11 @@
 
 #include "mqtt.h"
 
+/* Thingspeak */
+#ifdef THINGSPEAK
+#include "libthingspeak/src/thingspeak.h"
+#endif
+
 #ifdef MQTTDEBUG
 
 static unsigned short DEBUG_FLAG=0x4;
@@ -89,6 +94,10 @@ typedef struct mqtt_hnd {
 	time_t			 mqh_start_time;
 } mqtt_hnd_t;
 
+struct ts_MQTT {
+	ts_context_t *ctx;
+} *TSMQTT;
+
 #include "mqtt_cmd.h"
 
 static mqtt_hnd_t Mosquitto;
@@ -118,7 +127,13 @@ int MQTT_printf(const char *, ...);
 int MQTT_log(const char *, ...);
 static void MQTT_finish(mqtt_hnd_t *);
 static WINDOW *init_screen();
+#ifdef THINGSPEAK
+static int MQTT_to_ts(struct ts_MQTT *, MQTT_data_type_t type, float value);
+static struct ts_MQTT * MQTT_to_ts_init(const char *apikey, int channel);
+#endif /* ! THINGSPEAK */
+
 void destroy_screen(struct mq_ch_screen *) ;
+
 
 
 
@@ -138,7 +153,7 @@ static bool mqtt_rpi_init(const char *progname, char *conf);
  */
 
 /*
- * 
+ *
  * usage: mqtt_rpi [config_file]
  */
 int
@@ -157,16 +172,17 @@ main(int argc, char **argv)
 		exit(3);
 	}
 
-		
+
 	if ((mosq = MQTT_init(&Mosquitto, false, __PROGNAME)) == NULL) {
 		fprintf(stderr, "%s: failed to init MQTT protocol \n", __PROGNAME);
 		exit(3);
 
 	}
 	sqlitedb = MQTT_initdb("/var/db/pigoda/sensors.db");
-	
+
 	init_screen(&screen_data);
 	MQTT_sub(Mosquitto.mqh_mos, "/guernika/environment/#");
+	TSMQTT = MQTT_to_ts_init("YLW6C8UWBXKWMEXZ", 10709);
 
 	while (main_loop) {
 		/* -1 = 1000ms /  0 = instant return */
@@ -183,7 +199,7 @@ main(int argc, char **argv)
 				break;
 			}
 		}
-		
+
 		if (got_SIGTERM) {
 			main_loop = false;
 			/*fprintf(stderr, "%s) got SIGTERM\n", __PROGNAME);*/
@@ -194,7 +210,9 @@ main(int argc, char **argv)
 			proc_command = false;
 			MQTT_pub(mosq, "/guernika/network/mqtt_graph/broadcast", false, "%lu", Mosquitto.mqh_start_time);
 		}
+
 		update_screen_stats(&screen_data);
+
 		if (screen_data.win != NULL) {
 			wrefresh(screen_data.win );
 		}
@@ -209,7 +227,7 @@ main(int argc, char **argv)
 }
 
 
-static int 
+static int
 MQTT_loop(void *m, int tout)
 {
 	struct mosquitto *mos = (struct mosquitto *) m;
@@ -220,7 +238,7 @@ MQTT_loop(void *m, int tout)
 		fprintf(logfile, "%s(): %d\n", __func__, errno);
 		fflush(logfile);
 	}
-	
+
 		switch (ret) {
 			case MOSQ_ERR_ERRNO:
 				MQTT_printf("error %d\n", errno);
@@ -264,7 +282,7 @@ MQTT_finish(mqtt_hnd_t *m)
 	return;
 }
 
-static void 
+static void
 my_subscribe_callback(struct mosquitto *mosq, void *userdata, int mid, int qos_count, const int *granted_qos)
 {
 	int i;
@@ -276,7 +294,7 @@ my_subscribe_callback(struct mosquitto *mosq, void *userdata, int mid, int qos_c
 }
 
 
-mqtt_cmd_t 
+mqtt_cmd_t
 mqtt_proc_msg(char *topic, char *payload)
 {
 	char	*p;
@@ -351,6 +369,7 @@ mqtt_proc_msg(char *topic, char *payload)
 			break;
 		}
 	}
+	
 	if (pstate == ST_DONE && cmd_hint == CMD_ERR) {
 		MQTT_printf("DEBUG: data == %s\n", pbuf);
 
@@ -380,7 +399,7 @@ my_log_callback(struct mosquitto *mosq, void *userdata, int level, const char *s
 }
 
 
-static void 
+static void
 my_message_callback(struct mosquitto *mosq, void *userdata, const struct mosquitto_message *msg)
 {
 	mqtt_cmd_t  cmd;
@@ -388,7 +407,7 @@ my_message_callback(struct mosquitto *mosq, void *userdata, const struct mosquit
 
 	if (msg->payloadlen){
 		cmd = mqtt_proc_msg(msg->topic, msg->payload);
-		if (cmd == CMD_ERR) 
+		if (cmd == CMD_ERR)
 			/*MQTT_printf( "Command %s = %d\n", msg->topic, msg->payload, cmd);
 		else*/
 			MQTT_printf( "CMD_ERR: Unknown command %s@\"%s\" = %d\n",  msg->payload, msg->topic,cmd);
@@ -403,6 +422,9 @@ my_message_callback(struct mosquitto *mosq, void *userdata, const struct mosquit
 				light = atof(msg->payload);
 				screen_data.light = (int) light;
 				/*MQTT_log("\\storing light value %d %s\n", (int) light, msg->payload);*/
+#ifdef THINGSPEAK
+				MQTT_to_ts(TSMQTT, T_LIGHT, light);
+#endif /* ! THINGSPEAK */
 				if (MQTT_store(sqlitedb, T_LIGHT, light) != 0) {
 					MQTT_log("Store failure\n");
 					screen_data.err_sqlite[STAT_SQLITE_LIGHT]++;
@@ -413,6 +435,9 @@ my_message_callback(struct mosquitto *mosq, void *userdata, const struct mosquit
 			case CMD_TEMPIN:
 				tempin = atof(msg->payload);
 				screen_data.tempin = tempin;
+#ifdef THINGSPEAK
+				MQTT_to_ts(TSMQTT, T_TEMPIN, tempin);
+#endif /* ! THINGSPEAK */
 				/*MQTT_printf("\\storing tempin %f \n", tempin );*/
 				if (MQTT_store(sqlitedb, T_TEMPIN, tempin) != 0) {
 					MQTT_log("Store failure\n");
@@ -425,6 +450,9 @@ my_message_callback(struct mosquitto *mosq, void *userdata, const struct mosquit
 				tempout = atof(msg->payload);
 				screen_data.tempout = tempout;
 				/*MQTT_printf("\\storing tempout %f \n", tempout );*/
+#ifdef THINGSPEAK
+				MQTT_to_ts(TSMQTT, T_TEMPOUT, tempout);
+#endif /* ! THINGSPEAK */
 				if (MQTT_store(sqlitedb, T_TEMPOUT, tempout) != 0) {
 					MQTT_log("Store failure\n");
 					screen_data.err_sqlite[STAT_SQLITE_TEMPOUT]++;
@@ -435,6 +463,9 @@ my_message_callback(struct mosquitto *mosq, void *userdata, const struct mosquit
 			case CMD_PRESSURE:
 				pressure = atof(msg->payload);
 				screen_data.pressure = pressure;
+#ifdef THINGSPEAK
+				MQTT_to_ts(TSMQTT, T_PRESSURE, pressure);
+#endif /* ! THINGSPEAK */
 				/*MQTT_printf("\\storing pressure %f \n", pressure );*/
 				if (MQTT_store(sqlitedb, T_PRESSURE, pressure) != 0) {
 					MQTT_log("Store failure\n");
@@ -454,7 +485,7 @@ my_message_callback(struct mosquitto *mosq, void *userdata, const struct mosquit
 					screen_data.store_sqlite[STAT_SQLITE_HUMIDITY]++;
 				}
 				break;
-			
+
 			case CMD_PIR:
 				pir = atof(msg->payload);
 				screen_data.pir = pir;
@@ -538,7 +569,7 @@ register_callbacks(struct mosquitto *mosq)
 	return;
 }
 
-static int  
+static int
 MQTT_pub(struct mosquitto *mosq, const char *topic, bool perm, const char *fmt, ...)
 {
 	size_t msglen;
@@ -560,7 +591,7 @@ MQTT_pub(struct mosquitto *mosq, const char *topic, bool perm, const char *fmt, 
 	return (ret);
 }
 
-static int 
+static int
 MQTT_sub(struct mosquitto *m, const char *fmt_topic, ...)
 {
 	int msgid = 0;
@@ -571,7 +602,7 @@ MQTT_sub(struct mosquitto *m, const char *fmt_topic, ...)
 	va_start(lst, fmt_topic);
 	vsnprintf(msgbuf, sizeof msgbuf, fmt_topic, lst);
 	va_end(lst);
-	
+
 	if ((ret = mosquitto_subscribe(m, &msgid, msgbuf, 0)) == MOSQ_ERR_SUCCESS)
 		ret = msgid;
 	else
@@ -581,17 +612,55 @@ MQTT_sub(struct mosquitto *m, const char *fmt_topic, ...)
 }
 
 
-static bool 
+#ifdef THINGSPEAK
+static struct ts_MQTT *
+MQTT_to_ts_init(const char *apikey, int channel)
+{
+	struct ts_MQTT *tsm;
+
+	tsm = malloc(sizeof(struct ts_MQTT));
+	tsm->ctx = ts_create_context(apikey, channel);
+	return (tsm);
+
+}
+
+static int 
+MQTT_to_ts(struct ts_MQTT *tsm, MQTT_data_type_t type, float value)
+{
+	ts_datapoint_t data;
+	
+	if (type == T_TEMPOUT) {
+		ts_set_value_i32(&data, (int)value);
+		ts_datastream_update(tsm->ctx, 0, "field1", &data);
+	} else if (type == T_PRESSURE) {
+		ts_set_value_i32(&data, (int)value);
+		ts_datastream_update(tsm->ctx, 0, "field4", &data);
+	} else if (type == T_TEMPIN) {
+		ts_set_value_i32(&data, (int)value);
+		ts_datastream_update(tsm->ctx, 0, "field3", &data);
+
+	} else if (type == T_LIGHT) {
+		ts_set_value_i32(&data, (int)value);
+		ts_datastream_update(tsm->ctx, 0, "field5", &data);
+	} else {
+		/* TODO unknown type error reporting */
+		return (-1);
+	}
+	return (0);
+}
+#endif /* ! THINGSPEAK */
+
+static bool
 mqtt_rpi_init(const char *progname, char *conf)
 {
 	bool   ret = true;
 	char  *configfile, *bufp, *p;
 	struct sigaction sa;
-	
+
 	bufp = malloc(HOST_NAME_MAX);
 	if (gethostname(bufp, HOST_NAME_MAX) != -1) {
 		__HOSTNAME = bufp;
-	} else 
+	} else
 		__HOSTNAME = "nil";
 
 	/*p = basename(progname);*/
@@ -642,7 +711,7 @@ init_screen(struct mq_ch_screen *scr) {
 	scr->win = local_win;
 	scr->win_stat = newwin(20, 0, 20, 0);
 	wrefresh(scr->win_stat);
-	
+
 
 	return (local_win);
 }
@@ -667,7 +736,7 @@ destroy_screen(struct mq_ch_screen *scr) {
 }
 
 
-static int 
+static int
 set_logging(mqtt_global_cfg_t *myconf)
 {
 	int ret = 0;
@@ -687,7 +756,7 @@ set_logging(mqtt_global_cfg_t *myconf)
 
 }
 
-static void 
+static void
 sig_hnd(int sig)
 {
 	switch (sig) {
@@ -708,7 +777,7 @@ sig_hnd(int sig)
 	return;
 }
 
-static void 
+static void
 siginfo(int signo, siginfo_t *info, void *context)
 {
 	fprintf(stdout, "%d %s %s\n", signo, context, strsignal(signo));
@@ -717,7 +786,7 @@ siginfo(int signo, siginfo_t *info, void *context)
 	return ;
 }
 
-int 
+int
 MQTT_log(const char *fmt, ...)
 {
 	va_list vargs;
@@ -728,7 +797,7 @@ MQTT_log(const char *fmt, ...)
 	struct tm *tmp;
 
 
-	
+
 	time(&curtime);
 	tmp = localtime(&curtime);
 	strftime(timebuf, sizeof timebuf, "%H:%M:%S %d-%m-%y %z", tmp);
@@ -738,7 +807,7 @@ MQTT_log(const char *fmt, ...)
 	if ((p = strrchr(pbuf, '\n')) != NULL) {
 		*p = '\0';
 	}
-	/* 
+	/*
 	 * switch (logtype) {
 	 * 	case LOG_FILE:
 	 * 	...
@@ -748,7 +817,7 @@ MQTT_log(const char *fmt, ...)
 	return (ret);
 }
 
-int 
+int
 MQTT_printf(const char *fmt, ...)
 {
 	va_list vargs;
@@ -759,12 +828,12 @@ MQTT_printf(const char *fmt, ...)
 
 	fmtbuf = strdup(fmt);
 	fmtlen = strlen(fmtbuf);
-	/*    
+	/*
 	*(fmtbuf+fmtlen) = '\0';
 	fmtlen--;
 	*(fmtbuf+fmtlen) = '\0';
 	*/
-	
+
 	va_start(vargs, fmt);
 	ret = vsnprintf(pbuf, sizeof pbuf, fmt, vargs);
 	va_end(vargs);
@@ -783,10 +852,10 @@ MQTT_printf(const char *fmt, ...)
 #endif
 	return (ret);
 }
+
 static void
 usage(void)
 {
 	fprintf(stderr, "usage: %s\n", __PROGNAME);
 	exit(64);
 }
-
