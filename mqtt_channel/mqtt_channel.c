@@ -127,12 +127,14 @@ int MQTT_printf(const char *, ...);
 int MQTT_log(const char *, ...);
 static void MQTT_finish(mqtt_hnd_t *);
 static WINDOW *init_screen();
+static struct mosquitto * MQTT_reconnect(struct mosquitto *m, int *ret);
 #ifdef THINGSPEAK
 static int MQTT_to_ts(struct ts_MQTT *, MQTT_data_type_t type, float value);
 static struct ts_MQTT * MQTT_to_ts_init(const char *apikey, int channel);
 #endif /* ! THINGSPEAK */
 
 void destroy_screen(struct mq_ch_screen *) ;
+static bool mqtt_conn_dead = false;
 
 
 
@@ -200,6 +202,15 @@ main(int argc, char **argv)
 			}
 		}
 
+		if (mqtt_conn_dead) {
+				if (MQTT_reconnect(mosq, NULL) != NULL) {
+					MQTT_log("Reconnect success!");
+					mqtt_conn_dead = false;
+				} else {
+					MQTT_log("Reconnect failure! Waiting 5secs");
+					sleep(5);
+				}
+		}
 		if (got_SIGTERM) {
 			main_loop = false;
 			/*fprintf(stderr, "%s) got SIGTERM\n", __PROGNAME);*/
@@ -233,34 +244,37 @@ MQTT_loop(void *m, int tout)
 	struct mosquitto *mos = (struct mosquitto *) m;
 	int	ret = 0;
 
+	if (mqtt_conn_dead) {
+		return (MOSQ_ERR_SUCCESS);
+	}
 	ret = mosquitto_loop(mos, tout, 1);
 	if (ret != MOSQ_ERR_SUCCESS) {
-		fprintf(logfile, "%s(): %d\n", __func__, errno);
+		fprintf(logfile, "%s(): %s %d\n", __func__, strerror(errno), ret);
 		fflush(logfile);
 	}
 
 		switch (ret) {
 			case MOSQ_ERR_ERRNO:
-				MQTT_printf("error %d\n", errno);
+				MQTT_printf("Error %s\n", strerror(errno));
 				main_loop = false;
 				break;
 			case MOSQ_ERR_INVAL:
-				MQTT_printf( "input parametrs invalid\n");
+				MQTT_printf( "Input parametrs invalid\n");
 				main_loop = false;
 				break;
 			case MOSQ_ERR_NOMEM:
-				MQTT_printf( "memory condition\n");
+				MQTT_printf( "Memory condition\n");
 				main_loop = false;
 				break;
 			case MOSQ_ERR_CONN_LOST:
 				MQTT_printf( "Connection lost\n");
-				main_loop = false;
+				mqtt_conn_dead = true;
 				break;
 			case MOSQ_ERR_SUCCESS:
 				;
 				break;
 			default:
-				MQTT_printf( "unknown ret code %d\n", ret);
+				MQTT_printf( "Unknown ret code %d\n", ret);
 				main_loop = false;
 		}
 	return (ret);
@@ -523,7 +537,7 @@ my_connect_callback(struct mosquitto *mosq, void *userdata, int result)
 
 	if(!result){
 		/* Subscribe to broker information topics on successful connect. */
-		MQTT_sub(mosq, "/guernika/IoT#");
+		//MQTT_sub(mosq, "/guernika/IoT#");
 		/*  /mosquitto_subscribe(mosq, NULL, "/guernika/#", 0);*/
 		/*mosquitto_subscribe(mosq, NULL, "/guernika/network/stations", 0);*/
 		MQTT_printf("Connected sucessfully %s\n", myMQTT_conf.mqtt_host);
@@ -543,6 +557,7 @@ MQTT_init(mqtt_hnd_t *m, bool c_sess, const char *id)
 	mosquitto_lib_init();
 	mosquitto_lib_version(&lv_major, &lv_minor, &lv_rev);
 	MQTT_printf( "%s@%s libmosquitto %d.%d rev=%d\n", id, __HOSTNAME, lv_major, lv_minor, lv_rev);
+
 	strncpy(m->mqh_id, id, sizeof(m->mqh_id));
 	bzero(m->mqh_msgbuf, sizeof(m->mqh_msgbuf));
 	m->mqh_clean_session = c_sess;
@@ -578,6 +593,7 @@ MQTT_pub(struct mosquitto *mosq, const char *topic, bool perm, const char *fmt, 
 	int	mid = 0;
 	int	ret;
 
+	if (mqtt_conn_dead) return (0);/* Connection lost MOSQ_ERR_CONN|MOSQ_ERR_CONN_LOST */
 	va_start(lst, fmt);
 	vsnprintf(msgbuf, sizeof msgbuf, fmt, lst);
 	va_end(lst);
@@ -610,6 +626,20 @@ MQTT_sub(struct mosquitto *m, const char *fmt_topic, ...)
 	return (ret);
 
 }
+
+static struct mosquitto *
+MQTT_reconnect(struct mosquitto *m, int *ret)
+{
+	int	mosq_ret;
+
+	MQTT_log("Reconnecting");
+	if ((mosq_ret = mosquitto_reconnect(m)) != MOSQ_ERR_SUCCESS) {
+		if (ret != NULL) *ret = mosq_ret;
+		return (NULL);
+	}
+	return (m);
+}
+
 
 
 #ifdef THINGSPEAK
