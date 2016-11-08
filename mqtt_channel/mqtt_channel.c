@@ -253,7 +253,7 @@ MQTT_loop(void *m, int tout)
 				main_loop = false;
 				break;
 			case MOSQ_ERR_CONN_LOST:
-				MQTT_printf( "connection lost\n");
+				MQTT_printf( "Connection lost\n");
 				main_loop = false;
 				break;
 			case MOSQ_ERR_SUCCESS:
@@ -630,13 +630,13 @@ MQTT_to_ts(struct ts_MQTT *tsm, MQTT_data_type_t type, float value)
 	ts_datapoint_t data;
 	
 	if (type == T_TEMPOUT) {
-		ts_set_value_i32(&data, (int)value);
+		ts_set_value_f32(&data, value);
 		ts_datastream_update(tsm->ctx, 0, "field1", &data);
 	} else if (type == T_PRESSURE) {
-		ts_set_value_i32(&data, (int)value);
+		ts_set_value_f32(&data, value);
 		ts_datastream_update(tsm->ctx, 0, "field4", &data);
 	} else if (type == T_TEMPIN) {
-		ts_set_value_i32(&data, (int)value);
+		ts_set_value_f32(&data, value);
 		ts_datastream_update(tsm->ctx, 0, "field3", &data);
 
 	} else if (type == T_LIGHT) {
