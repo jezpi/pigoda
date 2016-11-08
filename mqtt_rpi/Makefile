@@ -42,7 +42,7 @@ parser: mqtt_parse_config.o mqtt_parser_test.o
 
 install: mqtt_rpi
 	install -o root -m 755 mqtt_rpi /usr/bin/mqtt_rpi
-	install -o root -m 644 mqtt_rpi.yaml /etc/mqtt_rpi.yaml
+#	install -o root -m 644 mqtt_rpi.yaml /etc/mqtt_rpi.yaml
 	install -o root -m 755 pigoda_startup.sh /etc/init.d/pigoda
 	update-rc.d pigoda defaults
 	update-rc.d pigoda enable
@@ -54,3 +54,8 @@ test: mqttc parser
 	@echo "Building: \""$?"\""
 	@echo "Building: \""$*"\""
 
+stop:
+	/etc/init.d/pigoda stop
+
+runlocal:
+	./mqtt_rpi ./mqtt_rpi.yaml
