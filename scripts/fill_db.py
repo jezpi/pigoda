@@ -1,4 +1,4 @@
-import rrdtool, time,sys,datetime,sqlite3;
+import rrdtool,time,sys,datetime,sqlite3;
 import os
 import curses
 
@@ -34,7 +34,7 @@ def create_db(rrdfile, dsname, offs, step=60):
 
 
 
-def fill_db(sqlitedb, query, rrdfile, offset):
+def fill_rrd_db(sqlitedb, query, rrdfile, offset):
 	conn = sqlite3.connect(sqlitedb);
 	cur = conn.cursor();
 	win.addstr(1, 0, "hi");
@@ -73,11 +73,13 @@ else:
 	sys.exit(64)
 
 sensorsdb='/var/db/pigoda/sensors.db'
-rrdpath="/var/db/rrdcache/"
+rrdpath="/var/db/pigoda/rrd/"
+
 
 curses.initscr();
 win = curses.newwin(0, 0);
 win.insstr(1, 0, "...Press any key to continue...");
+win.insstr(2, 0, rrdpath);
 win.refresh();
 win.getkey();
 win.addstr(1, 0, "  Wait                         ");
@@ -92,11 +94,14 @@ win.refresh();
 if cmd == "pir":
 	off=get_sqlite_offset(sensorsdb, 'pir');
 	print printoff(off)+"  pir";
+        rrdf=rrdpath+"/pir.rrd"
+	fill_rrd_db(sensorsdb, 'SELECT * from pir WHERE timestamp > ? ORDER BY timestamp', rrdf+'/pir.rrd', off)
 elif cmd == "pressure":
 	off=get_sqlite_offset(sensorsdb, 'pressure');
 	print "Filling pressure starting from: "+printoff(off);
-	create_db(rrdpath+"/pressure.rrd", "pressure", off);
-	fill_db(sensorsdb, 'SELECT * from pressure WHERE timestamp > ? ORDER BY timestamp', '/var/db/rrdcache/pressure.rrd', off)
+        rrdf=rrdpath+"/pressure.rrd"
+	create_db(rrdf, "pressure", off);
+	fill_rrd_db(sensorsdb, 'SELECT * from pressure WHERE timestamp > ? ORDER BY timestamp', rrdf+'/pressure.rrd', off)
 	print printoff(off)+"  pressure";
 elif cmd == "light":
 	off=get_sqlite_offset(sensorsdb, 'light', ts='times');
@@ -104,14 +109,14 @@ elif cmd == "light":
 	win.addstr(1, 0, wstr);
 	win.refresh();
 	create_db(rrdpath+"/light.rrd", "light", off);
-	fill_db(sensorsdb, "SELECT * from light WHERE times > ? ORDER BY times", '/var/db/rrdcache/light.rrd', off);
+	fill_rrd_db(sensorsdb, "SELECT * from light WHERE times > ? ORDER BY times", rrdf+'/light.rrd', off);
 elif cmd == "tempin":
 	off=get_sqlite_offset(sensorsdb, 'temp_in', ts='timestamp');
 	wstr="   Start offset:"+printoff(off)+" temperaute inside";
 	win.addstr(1, 0, wstr);
 	win.refresh();
 	create_db(rrdpath+"/tempin.rrd", "tempin", off);
-	fill_db(sensorsdb, "SELECT * from temp_in WHERE timestamp > ? ORDER BY timestamp", '/var/db/rrdcache/tempin.rrd', off);
+	fill_rrd_db(sensorsdb, "SELECT * from temp_in WHERE timestamp > ? ORDER BY timestamp", '/var/db/pigoda/rrd/tempin.rrd', off);
 else:
 	win.addstr(0, 20, "unknown command "+cmd);
 
