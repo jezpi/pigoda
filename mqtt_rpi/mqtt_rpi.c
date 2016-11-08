@@ -67,6 +67,7 @@ typedef struct mqtt_hnd {
 	char 			 mqh_id[MAX_ID_SIZ];
 	bool 			 mqh_clean_session;
 	time_t			 mqh_start_time;
+	pid_t 			 mqh_mqttpir_pid;
 } mqtt_hnd_t;
 
 #include "mqtt_cmd.h"
@@ -85,6 +86,7 @@ static bool mqtt_conn_dead = false;
 static sig_atomic_t unknown_signal;
 static sig_atomic_t got_SIGUSR1;
 static sig_atomic_t got_SIGTERM;
+static sig_atomic_t got_SIGCHLD;
 static unsigned short failure;
 
 
@@ -110,6 +112,7 @@ static void sig_hnd(int);
 static void usage(void);
 
 static int pool_sensors(struct mosquitto *mosq);
+static int fork_mqtt_pir(mqtt_hnd_t *);
 static void siginfo(int signo, siginfo_t *info, void *context);
 static bool mqtt_rpi_init(const char *progname, char *conf);
 static struct mosquitto * MQTT_reconnect(struct mosquitto *m, int *ret);
@@ -160,6 +163,13 @@ main(int argc, char **argv)
 	if (myMQTT_conf.pool_sensors_delay == 0)
 		myMQTT_conf.pool_sensors_delay = 1055000;  /* defaults to 1 sec */
 
+	if (fork_mqtt_pir(&Mosquitto) <= 0) {
+		MQTT_log("Fork failed!");
+		/* ...
+		 * exit() 
+		 */
+	}
+
 	MQTT_log("Sensors init");
 	sensors_init(); /* wiringPiSetup() */
 	MQTT_log("Led act init");
@@ -208,6 +218,11 @@ main(int argc, char **argv)
 				MQTT_pub(mosq, "/guernika/network/broadcast/mqtt_rpi/user", false, "user_signal");
 				got_SIGUSR1 = 0;
 			}
+			if (got_SIGCHLD) {
+				waitpid(Mosquitto.mqh_mqttpir_pid, NULL, 0);
+				MQTT_log("got sigchld - mqttpir terminated!");
+				got_SIGCHLD = 0;
+			}
 		}
 
 		if (mqtt_conn_dead) {
@@ -243,7 +258,13 @@ main(int argc, char **argv)
 		
 	  	usleep(myMQTT_conf.pool_sensors_delay);
 	}
+
 	MQTT_printf("End of work");
+	if (Mosquitto.mqh_mqttpir_pid > 0) {
+		kill(Mosquitto.mqh_mqttpir_pid, SIGTERM);
+		waitpid(Mosquitto.mqh_mqttpir_pid, NULL, 1);
+		MQTT_log("mqttpir terminated");
+	}
 	MQTT_finish(&Mosquitto);
 	pidfile_remove(mr_pidfile);
 	fclose(logfile);
@@ -607,6 +628,7 @@ mqtt_rpi_init(const char *progname, char *conf)
 	signal(SIGQUIT, sig_hnd);
 	signal(SIGUSR1, sig_hnd);
 	signal(SIGTERM, sig_hnd);
+	signal(SIGCHLD, sig_hnd);
 	signal(SIGHUP, sig_hnd);
 	/*  /sa.sa_handler = sig_hnd;*/
 	sa.sa_sigaction = siginfo;
@@ -619,6 +641,30 @@ mqtt_rpi_init(const char *progname, char *conf)
 	if (set_logging(&myMQTT_conf) < 0)
 		ret = false;
 	return (ret);
+}
+/*
+ * fork()/exec() an instance of mqttpir
+ */
+static int 
+fork_mqtt_pir(mqtt_hnd_t *mqh)
+{
+	pid_t 	chpid;
+	int     wstatus;
+#define MQTT_PIR_PATH     "/home/jez/repos/pigoda/mqtt_rpi/mqttpir/mqttpir"
+	switch((chpid = fork())) {
+		case 0: /* XXX hardcoded path */
+			execlp(MQTT_PIR_PATH, MQTT_PIR_PATH, NULL);
+			MQTT_log("Failed to exec %s: %s", MQTT_PIR_PATH, strerror(errno));
+			exit(0);
+			break;
+		case -1:
+			MQTT_log("Failed to fork/exec mqttpir");
+			break;
+		default:
+			MQTT_log("Forked mqttpir with pid=%d", chpid);
+			mqh->mqh_mqttpir_pid = chpid;
+	}
+	return (chpid);
 }
 
 
@@ -700,6 +746,9 @@ sig_hnd(int sig)
 			break;
 		case SIGUSR1:
 			got_SIGUSR1 = 1;
+			break;
+		case SIGCHLD:
+			got_SIGCHLD = 1;
 			break;
 		default:
 			fprintf(stderr, "got unknown signal %s\n", strsignal(sig));
