@@ -313,6 +313,18 @@ MQTT_loop(void *m, int tout)
 			case MOSQ_ERR_SUCCESS:
 				;
 				break;
+			case MOSQ_ERR_AUTH:
+				MQTT_log( "Authentication error\n");
+				main_loop = false;
+				break;
+			case MOSQ_ERR_ACL_DENIED:
+				MQTT_log( "ACL denied\n");
+				main_loop = false;
+				break;
+			case MOSQ_ERR_CONN_REFUSED:
+				MQTT_log( "Connection refused\n");
+				main_loop = false;
+				break;
 			default:
 				MQTT_log( "unknown ret code %d\n", ret);
 				main_loop = false;
@@ -492,7 +504,11 @@ my_connect_callback(struct mosquitto *mosq, void *userdata, int result)
 		/*mosquitto_subscribe(mosq, NULL, "/guernika/network/stations", 0);*/
 		MQTT_printf("Connected sucessfully %s\n", myMQTT_conf.mqtt_host);
 	} else {
-		MQTT_printf("Connect failed to %s\n", myMQTT_conf.mqtt_host);
+		MQTT_printf("Connect failed to %s:%s@%s:%d\n", 
+				myMQTT_conf.mqtt_user,
+				myMQTT_conf.mqtt_password,
+				myMQTT_conf.mqtt_host, 
+				myMQTT_conf.mqtt_port);
 	}
 	return;
 }
