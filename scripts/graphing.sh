@@ -1,12 +1,13 @@
 #!/bin/sh
 
+. ./pigoda_rrd.inc.sh
 dt=`date +%s`
 offs=$((dt-10800))
 
 
 graph_pir() {
 echo "=> Creating png graph - pir"
-	rrdtool graph /var/www/pigoda/pir.png \
+	rrdtool graph ${RRD_GRAPH_PATH}/pir.png \
 		-w 785 -h 120 -a PNG \
 		--slope-mode \
 		--start now-12h --end now \
@@ -15,7 +16,7 @@ echo "=> Creating png graph - pir"
 		--watermark="Date `date`" \
 		--alt-y-grid \
 		--rigid \
-		DEF:movm=/var/db/rrdcache/pir.rrd:pir:AVERAGE \
+		DEF:movm=${RRD_DB_PATH}/pir.rrd:pir:AVERAGE \
 		VDEF:movmlast=movm,AVERAGE \
 		AREA:movm#0000FF:"Movement rate\n" \
 		LINE1:movmlast#FF00FF:"Average movement rate\n":dashes \
@@ -25,7 +26,7 @@ echo "=> Creating png graph - pir"
 
 graph_tempin() {
 echo "=> Creating png graph - tempin"
-	rrdtool graph /var/www/pigoda/tempin.png \
+	rrdtool graph ${RRD_GRAPH_PATH}/tempin.png \
 		-w 785 -h 120 -a PNG \
 		--slope-mode \
 		--start $offs --end now \
@@ -34,7 +35,7 @@ echo "=> Creating png graph - tempin"
 		--watermark="Date `date`" \
 		--alt-y-grid \
 		--rigid \
-		DEF:temp_in=/var/db/rrdcache/tempin.rrd:tempin:AVERAGE \
+		DEF:temp_in=${RRD_DB_PATH}/tempin.rrd:tempin:AVERAGE \
 		VDEF:tempinlast=temp_in,LAST \
 		AREA:temp_in#0000FF:"temperature(C)\n" \
 		LINE1:tempinlast#FF00FF:"tempemperature last (C)\n":dashes \
@@ -46,7 +47,7 @@ echo "=> Creating png graph - tempin"
 
 graph_tempin_weekly() {
 echo "=> Creating png graph - tempin"
-	rrdtool graph /var/www/pigoda/tempin_weekly.png \
+	rrdtool graph ${RRD_GRAPH_PATH}/tempin_weekly.png \
 		-w 785 -h 120 -a PNG \
 		--slope-mode \
 		--start 'now-14d' --end now \
@@ -55,7 +56,7 @@ echo "=> Creating png graph - tempin"
 		--watermark="Date `date`" \
 		--alt-y-grid \
 		--rigid \
-		DEF:temp_in=/var/db/rrdcache/tempin.rrd:tempin:AVERAGE \
+		DEF:temp_in=${RRD_DB_PATH}/tempin.rrd:tempin:AVERAGE \
 		VDEF:tempinlast=temp_in,LAST \
 		AREA:temp_in#0000FF:"temp(C)\n" \
 		LINE1:tempinlast#FF00FF:"temp(C)\n":dashes \
@@ -66,7 +67,7 @@ echo "=> Creating png graph - tempin"
 
 graph_vc_temp() {
 	echo "=> Creating png graph - vc_temp"
-	rrdtool graph /var/www/pigoda/temperature.png \
+	rrdtool graph ${RRD_GRAPH_PATH}/temperature.png \
 		-w 785 -h 120 -a PNG \
 		--slope-mode \
 		--start $offs --end now \
@@ -75,7 +76,7 @@ graph_vc_temp() {
 		--watermark="Date `date`" \
 		--alt-y-grid \
 		--rigid \
-		DEF:vc_temp=/var/db/rrdcache/vc_temp.rrd:vctemp:AVERAGE \
+		DEF:vc_temp=${RRD_DB_PATH}/vc_temp.rrd:vctemp:AVERAGE \
 		LINE1:vc_temp#D40000:"vc_temp(C)" \
 		GPRINT:vc_temp:MAX:"Max\: %5.2lf" \
 		GPRINT:vc_temp:AVERAGE:"Avg\: %5.2lf" \
@@ -90,7 +91,7 @@ graph_vc_temp() {
 
 graph_tempmix() {
 echo "=> Creating png graph - tempmix"
-rrdtool graph /var/www/pigoda/tempmix.png \
+rrdtool graph ${RRD_GRAPH_PATH}/tempmix.png \
 	-w 785 -h 420 -a PNG \
 	--slope-mode \
 	--start now-46h --end now \
@@ -99,11 +100,11 @@ rrdtool graph /var/www/pigoda/tempmix.png \
 	--watermark="Date `date`" \
 	--lower-limit 15 \
 	--rigid \
-	DEF:vc_temp=/var/db/rrdcache/vc_temp.rrd:vctemp:AVERAGE \
+	DEF:vc_temp=${RRD_DB_PATH}/vc_temp.rrd:vctemp:AVERAGE \
 	VDEF:vctemplast=vc_temp,LAST \
-	DEF:temp_out=/var/db/rrdcache/tempout.rrd:tempout:AVERAGE \
+	DEF:temp_out=${RRD_DB_PATH}/tempout.rrd:tempout:AVERAGE \
 	VDEF:tempoutlast=temp_out,LAST \
-	DEF:temp_in=/var/db/rrdcache/tempin.rrd:tempin:AVERAGE \
+	DEF:temp_in=${RRD_DB_PATH}/tempin.rrd:tempin:AVERAGE \
 	VDEF:tempinlast=temp_in,LAST \
 	COMMENT:"Legend\:" \
 	LINE2:vc_temp#D40000:"temp vc_core (C)" \
@@ -126,7 +127,7 @@ rrdtool graph /var/www/pigoda/tempmix.png \
 
 graph_vc_temp_daily () {
 echo "=> Creating png graph - vc_temp"
-rrdtool graph /var/www/pigoda/temperature_daily.png \
+rrdtool graph ${RRD_GRAPH_PATH}/temperature_daily.png \
 	-w 785 -h 120 -a PNG \
 	--slope-mode \
 	--start 'now-1d' --end now \
@@ -135,7 +136,7 @@ rrdtool graph /var/www/pigoda/temperature_daily.png \
 	--watermark="Date `date`" \
 	--alt-y-grid \
 	--rigid \
-	DEF:vc_temp=/var/db/rrdcache/vc_temp.rrd:vctemp:AVERAGE \
+	DEF:vc_temp=${RRD_DB_PATH}/vc_temp.rrd:vctemp:AVERAGE \
 	VDEF:vctempmax=vc_temp,MAXIMUM \
 	AREA:vc_temp#D40000:"temp(C)\l" \
 	LINE1:vctempmax#008000:"vc temp max(C)\l" \
@@ -145,7 +146,7 @@ rrdtool graph /var/www/pigoda/temperature_daily.png \
 }
 graph_vc_temp_pastdays () {
 	echo "=> Creating png graph - vc_temp past 3 days"
-	rrdtool graph /var/www/pigoda/temperature_3_days.png \
+	rrdtool graph ${RRD_GRAPH_PATH}/temperature_3_days.png \
 		-w 785 -h 120 -a PNG \
 		--slope-mode \
 		--start 'now-14d' --end now \
@@ -154,7 +155,7 @@ graph_vc_temp_pastdays () {
 		--watermark="Date `date`" \
 		--alt-y-grid \
 		--rigid \
-		DEF:vc_temp=/var/db/rrdcache/vc_temp.rrd:vctemp:AVERAGE \
+		DEF:vc_temp=${RRD_DB_PATH}/vc_temp.rrd:vctemp:AVERAGE \
 		LINE1:vc_temp#FF00FF:"temp(C)" \
 		GPRINT:vc_temp:MAX:"Max\: %5.2lf" 
 
@@ -163,7 +164,7 @@ graph_vc_temp_pastdays () {
 graph_light () {
 
 echo "=> Creating png graph - light"
-rrdtool graph /var/www/pigoda/light.png \
+rrdtool graph ${RRD_GRAPH_PATH}/light.png \
 	-w 785 -h 120 -a PNG \
 	--slope-mode \
 	--start 'now-12h' --end now \
@@ -172,7 +173,7 @@ rrdtool graph /var/www/pigoda/light.png \
 	--watermark="Date `date`" \
 	--alt-y-grid \
 	--rigid \
-	DEF:light=/var/db/rrdcache/light.rrd:light:AVERAGE \
+	DEF:light=${RRD_DB_PATH}/light.rrd:light:AVERAGE \
 	AREA:light#00FF00:"light \l" \
 	GPRINT:light:MAX:"Max\: %5.2lf\l" \
 	GPRINT:light:MIN:"Min\: %5.2lf \l" \
@@ -183,7 +184,7 @@ rrdtool graph /var/www/pigoda/light.png \
 graph_light_weekly () {
 
 echo "=> Creating png graph - light weekly"
-rrdtool graph /var/www/pigoda/light_weekly.png \
+rrdtool graph ${RRD_GRAPH_PATH}/light_weekly.png \
 	-w 785 -h 120 -a PNG \
 	--slope-mode \
 	--start 'now-14d' --end now \
@@ -192,7 +193,7 @@ rrdtool graph /var/www/pigoda/light_weekly.png \
 	--watermark="Date `date`" \
 	--alt-y-grid \
 	--rigid \
-	DEF:light=/var/db/rrdcache/light.rrd:light:AVERAGE \
+	DEF:light=${RRD_DB_PATH}/light.rrd:light:AVERAGE \
 	AREA:light#00FF00:"light \l" \
 	GPRINT:light:MAX:"Max\: %5.2lf\l" \
 	GPRINT:light:MIN:"Min\: %5.2lf \l" \
@@ -204,7 +205,7 @@ rrdtool graph /var/www/pigoda/light_weekly.png \
 
 graph_tempout() {
 echo "=> Creating png graph - tempout"
-	rrdtool graph /var/www/pigoda/tempout.png \
+	rrdtool graph ${RRD_GRAPH_PATH}/tempout.png \
 	-w 785 -h 120 -a PNG \
 	--slope-mode \
 	--start now-3h --end now \
@@ -213,7 +214,7 @@ echo "=> Creating png graph - tempout"
 	--watermark="Date `date`" \
 	--alt-y-grid \
 	--rigid \
-	DEF:tempout=/var/db/rrdcache/tempout.rrd:tempout:AVERAGE \
+	DEF:tempout=${RRD_DB_PATH}/tempout.rrd:tempout:AVERAGE \
 	AREA:tempout#EF500B:"temp(C)\n" \
 	GPRINT:tempout:MAX:" Max\: %5.2lf \n" \
 	GPRINT:tempout:AVERAGE:" Avg\: %5.2lf \n" \
@@ -223,7 +224,7 @@ echo "=> Creating png graph - tempout"
 
 graph_tempout_weekly() {
 echo "=> Creating png graph - tempout"
-rrdtool graph /var/www/pigoda/tempout_weekly.png \
+rrdtool graph ${RRD_GRAPH_PATH}/tempout_weekly.png \
 -w 785 -h 120 -a PNG \
 --slope-mode \
 --start now-7d --end now \
@@ -232,7 +233,7 @@ rrdtool graph /var/www/pigoda/tempout_weekly.png \
 --watermark="Date `date`" \
 --alt-y-grid \
 --rigid \
-DEF:tempout=/var/db/rrdcache/tempout.rrd:tempout:AVERAGE \
+DEF:tempout=${RRD_DB_PATH}/tempout.rrd:tempout:AVERAGE \
 AREA:tempout#EF500B:"temperature(C)\n" \
 GPRINT:tempout:MAX:" Max\: %5.2lf \n" \
 GPRINT:tempout:AVERAGE:" Avg\: %5.2lf \n" \
@@ -243,7 +244,7 @@ GPRINT:tempout:LAST:"Last\: %5.2lf\n"
 
 graph_pressure() {
 echo "=> Creating png graph - pressure"
-rrdtool graph /var/www/pigoda/pressure.png \
+rrdtool graph ${RRD_GRAPH_PATH}/pressure.png \
 -w 785 -h 120 -a PNG \
 --slope-mode \
 --start now-1d --end now-10m \
@@ -252,7 +253,7 @@ rrdtool graph /var/www/pigoda/pressure.png \
 --watermark="Date `date`" \
 --alt-y-grid \
 --rigid \
-DEF:pressure=/var/db/rrdcache/pressure.rrd:pressure:AVERAGE \
+DEF:pressure=${RRD_DB_PATH}/pressure.rrd:pressure:AVERAGE \
 AREA:pressure#008000:"Pressure (hPa)" \
 GPRINT:pressure:MAX:"Max\: %5.2lf" \
 GPRINT:pressure:MIN:"Min\: %5.2lf" \
@@ -264,7 +265,7 @@ GPRINT:pressure:AVERAGE:"Avg\: %5.2lf"
 
 graph_pressure_daily() {
 echo "=> Creating png graph - pressure daily"
-rrdtool graph /var/www/pigoda/pressure_daily.png \
+rrdtool graph ${RRD_GRAPH_PATH}/pressure_daily.png \
 -w 785 -h 120 -a PNG \
 --slope-mode \
 --start now-14d --end now \
@@ -275,7 +276,7 @@ rrdtool graph /var/www/pigoda/pressure_daily.png \
 --upper-limit 1023 \
 --alt-y-grid \
 --rigid \
-DEF:pressure=/var/db/rrdcache/pressure.rrd:pressure:AVERAGE \
+DEF:pressure=${RRD_DB_PATH}/pressure.rrd:pressure:AVERAGE \
 VDEF:pressuremax=pressure,MAXIMUM \
 VDEF:pressuremin=pressure,MINIMUM \
 AREA:pressure#008008:"Pressure (hPa)\n" \
@@ -314,6 +315,16 @@ do
 			update_graphs pressure;
 			graph_pressure;
 			;;
+		pir)
+			graph_pir;
+			;;
+		light)
+			graph_light;
+			;;
+		pressure)
+			graph_pressure;
+			;;
+
 		all)
 			update_graphs pressure;
 			update_graphs tempin;
