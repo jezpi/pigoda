@@ -29,8 +29,12 @@ def update_db(sqlitedb, table, rrdfile, ts='timestamp'):
 		rrdtool.update(rrdfile, sup);
 	conn.close()
 
+#######
+# main
+#
 
 dbfile="/var/db/pigoda/sensors.db";
+rrddbpath="/var/db/pigoda/rrd/";
 if sys.argv[1] == "vc_temp":
 	print "=> Updating vc_temp";
 	try:
@@ -39,36 +43,37 @@ if sys.argv[1] == "vc_temp":
 		print "Failed to update vc_temp"
 elif sys.argv[1] == "tempin":
 	print "=> Updating tempin";
+	update_db(dbfile, "temp_in", rrddbpath+"/tempin.rrd");
 	try:
-		update_db(dbfile, "temp_in", "/var/db/rrdcache/tempin.rrd");
+		update_db(dbfile, "temp_in", rrddbpath+"/tempin.rrd");
 		#update_db_tempin(dbfile)
 	except:
 		print "Failed to update tempin"
 elif sys.argv[1] == "tempout":
 	print "=> Updating tempout";
 	try:
-		update_db(dbfile, "temp_out", "/var/db/rrdcache/tempout.rrd");
+		update_db(dbfile, "temp_out", rrddbpath+"/tempout.rrd");
 		#update_db_tempout(dbfile)
 	except:
 		print "failed to update tempout"
 elif sys.argv[1] == "light":
 	print "=> Updating light";
 	try:
-		update_db(dbfile, "light", "/var/db/rrdcache/light.rrd", "times");
+		update_db(dbfile, "light", rrddbpath+"/light.rrd", "times");
 		#update_db_light(dbfile)
 	except:
 		print "failed to update light"
 elif sys.argv[1] == "pressure":
 	print "=> Updating pressure";
 	try:
-		update_db(dbfile, "pressure", "/var/db/rrdcache/pressure.rrd");
+		update_db(dbfile, "pressure", rrddbpath+"/pressure.rrd");
 		#update_db_pressure(dbfile)
 	except:
 		print "failed to update pressure"
 elif sys.argv[1] == "pir":
 	print "=> Updating pir";
 	try:
-		update_db(dbfile, "pir", "/var/db/rrdcache/pir.rrd");
+		update_db(dbfile, "pir", rrddbpath+"/pir.rrd");
 		#update_db_pir(dbfile)
 	except:
 		print "failed to update pir"
