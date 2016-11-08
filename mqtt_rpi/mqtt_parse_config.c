@@ -1,7 +1,7 @@
 #include <stdio.h>
 
 #include <yaml.h>
-#include "mqttc.h"
+#include "mqtt.h"
 #define DEBUG
 #ifdef DEBUG
 
@@ -25,7 +25,7 @@ mqtt_global_cfg_t myMQTT;
 
 static char *curvar;
 FILE *debuglog;
-enum {V_UNKNOWN, V_PIDFILE, V_LOGFILE, V_DEBUG, V_SERVER, V_MQTTUSER, V_MQTTPASS, V_MQTTPORT, V_DAEMON} c_opts = V_UNKNOWN;
+enum {V_UNKNOWN, V_PIDFILE, V_LOGFILE, V_DEBUG, V_SERVER, V_MQTTUSER, V_MQTTPASS, V_MQTTPORT, V_DAEMON, V_DELAY} c_opts = V_UNKNOWN;
 
 static int yaml_assign_scalar(yaml_event_t *t)
 {
@@ -36,6 +36,8 @@ static int yaml_assign_scalar(yaml_event_t *t)
 		myMQTT.pidfile = NULL;
 	} else if (!strcasecmp(t->data.scalar.value, "debug")) {
 		c_opts = V_DEBUG;
+	} else if (!strcasecmp(t->data.scalar.value, "delay")) {
+		c_opts = V_DELAY;
 	} else if (!strcasecmp(t->data.scalar.value, "mqtt_user")) {
 		c_opts = V_MQTTUSER;
 	} else if (!strcasecmp(t->data.scalar.value, "logfile")) {
@@ -65,6 +67,10 @@ static int yaml_assign_scalar(yaml_event_t *t)
 				break;
 			case V_DEBUG:
 				myMQTT.debug_level = (unsigned short) atoi(t->data.scalar.value);
+				c_opts = V_UNKNOWN;
+				break;
+			case V_DELAY:
+				myMQTT.pool_sensors_delay = (unsigned int) atoi(t->data.scalar.value);
 				c_opts = V_UNKNOWN;
 				break;
 			case V_SERVER:

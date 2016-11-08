@@ -139,6 +139,7 @@ static bool mqtt_conn_dead = false;
 
 
 
+
 mqtt_cmd_t mqtt_proc_msg(char *, char *);
 
 static int set_logging(mqtt_global_cfg_t *myconf);
@@ -667,6 +668,9 @@ MQTT_to_ts(struct ts_MQTT *tsm, MQTT_data_type_t type, float value)
 		ts_datastream_update(tsm->ctx, 0, "field4", &data);
 	} else if (type == T_TEMPIN) {
 		ts_set_value_f32(&data, value);
+		ts_datastream_update(tsm->ctx, 0, "field1", &data);
+	} else if (type == T_TEMPOUT) {
+		ts_set_value_f32(&data, (int)value);
 		ts_datastream_update(tsm->ctx, 0, "field3", &data);
 
 	} else if (type == T_LIGHT) {

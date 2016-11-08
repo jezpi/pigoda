@@ -25,7 +25,7 @@
 #include <wiringPi.h> /* defs of HIGH and LOW */
 
 #include "mqtt.h"
-#include "mqtt_sensors.h" 
+#include "mqtt_sensors.h"
 #include "mqtt_wiringpi.h"
 #ifdef MQTTDEBUG
 
@@ -67,6 +67,7 @@ typedef struct mqtt_hnd {
 	char 			 mqh_id[MAX_ID_SIZ];
 	bool 			 mqh_clean_session;
 	time_t			 mqh_start_time;
+	pid_t 			 mqh_mqttpir_pid;
 } mqtt_hnd_t;
 
 #include "mqtt_cmd.h"
@@ -80,10 +81,12 @@ static bool proc_command;
 static bool mqtt_querylog = false;
 static bool mqtt_publish_log = false;
 static struct pidfh *mr_pidfile;
-static volatile bool main_loop;
+static bool main_loop;
+static bool mqtt_conn_dead = false;
 static sig_atomic_t unknown_signal;
 static sig_atomic_t got_SIGUSR1;
 static sig_atomic_t got_SIGTERM;
+static sig_atomic_t got_SIGCHLD;
 static unsigned short failure;
 
 
@@ -109,15 +112,17 @@ static void sig_hnd(int);
 static void usage(void);
 
 static int pool_sensors(struct mosquitto *mosq);
+static int fork_mqtt_pir(mqtt_hnd_t *);
 static void siginfo(int signo, siginfo_t *info, void *context);
 static bool mqtt_rpi_init(const char *progname, char *conf);
+static struct mosquitto * MQTT_reconnect(struct mosquitto *m, int *ret);
 /*
  * Application used to collect and store information from various MQTT channels
  *
  */
 
 /*
- * 
+ *
  * usage: mqtt_rpi [config_file]
  */
 int
@@ -155,12 +160,21 @@ main(int argc, char **argv)
 		MQTT_log("Staying in foreground!\n");
 	}
 	pidfile_write(mr_pidfile);
-		
+	if (myMQTT_conf.pool_sensors_delay == 0)
+		myMQTT_conf.pool_sensors_delay = 1055000;  /* defaults to 1 sec */
+
+	if (fork_mqtt_pir(&Mosquitto) <= 0) {
+		MQTT_log("Fork failed!");
+		/* ...
+		 * exit() 
+		 */
+	}
+
 	MQTT_log("Sensors init");
 	sensors_init(); /* wiringPiSetup() */
 	MQTT_log("Led act init");
-	startup_led_act(100); /*  XXX ugly hack
-				 it has a magic number which is just to wait until
+	startup_led_act(100); /*  XXX ugly hack with magic number.
+				 It has a magic number which is just to wait until
 				 the NIC settles up, it takes a while and i preassume
 				 that inmediate data acquisition after reboot is not
 				 so critical. It is obviously relative and a workaround.
@@ -188,10 +202,13 @@ main(int argc, char **argv)
 		/* -1 = 1000ms /  0 = instant return */
 		while((mqloopret = MQTT_loop(mosq, 0)) != MOSQ_ERR_SUCCESS) {
 			if (mqloopret == MOSQ_ERR_CONN_LOST || mqloopret == MOSQ_ERR_NO_CONN) {
-				main_loop=false;
-				do_pool_sensors = false;
-				failure = 1;
+				term_led_act(1);/* value 1 indicates failure */
 				break;
+			} else if (mqloopret != MOSQ_ERR_SUCCESS) {
+					do_pool_sensors = false;
+					main_loop = false;
+					failure = 1;
+					break;
 			}
 			if (first_run) {
 				MQTT_pub(mosq, "/guernika/network/broadcast/mqtt_rpi", true, "on");
@@ -201,9 +218,24 @@ main(int argc, char **argv)
 				MQTT_pub(mosq, "/guernika/network/broadcast/mqtt_rpi/user", false, "user_signal");
 				got_SIGUSR1 = 0;
 			}
+			if (got_SIGCHLD) {
+				waitpid(Mosquitto.mqh_mqttpir_pid, NULL, 0);
+				MQTT_log("got sigchld - mqttpir terminated!");
+				got_SIGCHLD = 0;
+			}
 		}
-		
-		
+
+		if (mqtt_conn_dead) {
+				if (MQTT_reconnect(mosq, NULL) != NULL) {
+					MQTT_log("Reconnect success!");
+					mqtt_conn_dead = false;
+					do_pool_sensors = true;
+					startup_led_act(10); /*  XXX ugly hack*/
+				} else {
+					MQTT_log("Reconnect failure! Waiting 5secs");
+					sleep(5);
+				}
+		}
 		if (got_SIGTERM) {
 			main_loop = false;
 			fprintf(stderr, "%s) got SIGTERM\n", __PROGNAME);
@@ -223,10 +255,16 @@ main(int argc, char **argv)
 			}
 			flash_led(GREEN_LED, LOW);
 		}
-
-	  	usleep(1055000);
+		
+	  	usleep(myMQTT_conf.pool_sensors_delay);
 	}
+
 	MQTT_printf("End of work");
+	if (Mosquitto.mqh_mqttpir_pid > 0) {
+		kill(Mosquitto.mqh_mqttpir_pid, SIGTERM);
+		waitpid(Mosquitto.mqh_mqttpir_pid, NULL, 1);
+		MQTT_log("mqttpir terminated");
+	}
 	MQTT_finish(&Mosquitto);
 	pidfile_remove(mr_pidfile);
 	fclose(logfile);
@@ -235,19 +273,20 @@ main(int argc, char **argv)
 	return (0);
 }
 
-
-static int 
+static int
 MQTT_loop(void *m, int tout)
 {
 	struct mosquitto *mos = (struct mosquitto *) m;
 	int	ret = 0;
-
+  if (mqtt_conn_dead) {
+		return (MOSQ_ERR_SUCCESS);
+	}
 	ret = mosquitto_loop(mos, tout, 1);
 	if (ret != MOSQ_ERR_SUCCESS) {
 		fprintf(logfile, "%s(): %d\n", __func__, errno);
 		fflush(logfile);
 	}
-	
+
 		switch (ret) {
 			case MOSQ_ERR_ERRNO:
 				MQTT_log("error %d\n", errno);
@@ -258,15 +297,33 @@ MQTT_loop(void *m, int tout)
 				main_loop = false;
 				break;
 			case MOSQ_ERR_NOMEM:
-				MQTT_log( "memory condition\n");
+				MQTT_log( "Memory condition\n");
 				main_loop = false;
 				break;
 			case MOSQ_ERR_CONN_LOST:
-				MQTT_log( "connection lost\n");
-				main_loop = false;
+				MQTT_log( "Connection lost (%d)\n", errno);
+				/*main_loop = false; */
+				mqtt_conn_dead = true;
 				break;
+			case MOSQ_ERR_NO_CONN:
+				MQTT_log( "No connection lost\n");
+				/*main_loop = false;*/
+				mqtt_conn_dead = true;
+			  break;
 			case MOSQ_ERR_SUCCESS:
 				;
+				break;
+			case MOSQ_ERR_AUTH:
+				MQTT_log( "Authentication error\n");
+				main_loop = false;
+				break;
+			case MOSQ_ERR_ACL_DENIED:
+				MQTT_log( "ACL denied\n");
+				main_loop = false;
+				break;
+			case MOSQ_ERR_CONN_REFUSED:
+				MQTT_log( "Connection refused\n");
+				main_loop = false;
 				break;
 			default:
 				MQTT_log( "unknown ret code %d\n", ret);
@@ -275,7 +332,7 @@ MQTT_loop(void *m, int tout)
 	return (ret);
 }
 
-static void 
+static void
 my_publish_callback(struct mosquitto *mosq, void *con, int mid)
 {
 	if (mqtt_publish_log)
@@ -292,7 +349,7 @@ MQTT_finish(mqtt_hnd_t *m)
 	return;
 }
 
-static void 
+static void
 my_subscribe_callback(struct mosquitto *mosq, void *userdata, int mid, int qos_count, const int *granted_qos)
 {
 	int i;
@@ -304,7 +361,7 @@ my_subscribe_callback(struct mosquitto *mosq, void *userdata, int mid, int qos_c
 }
 
 
-mqtt_cmd_t 
+mqtt_cmd_t
 mqtt_proc_msg(char *topic, char *payload)
 {
 	char	*p;
@@ -397,14 +454,14 @@ my_log_callback(struct mosquitto *mosq, void *userdata, int level, const char *s
 }
 
 
-static void 
+static void
 my_message_callback(struct mosquitto *mosq, void *userdata, const struct mosquitto_message *msg)
 {
 	mqtt_cmd_t  cmd;
 
 	if (msg->payloadlen){
 		cmd = mqtt_proc_msg(msg->topic, msg->payload);
-		if (cmd == CMD_ERR) 	
+		if (cmd == CMD_ERR)
 			MQTT_log( "ERROR! Unknown command %s@\"%s\" = %d\n",  msg->payload, msg->topic,cmd);
 		else
 			MQTT_log("\\Command %s@\"%s\" = %d\n",  msg->payload, msg->topic,cmd);
@@ -426,7 +483,7 @@ my_message_callback(struct mosquitto *mosq, void *userdata, const struct mosquit
 					MQTT_log( "ERROR. Unknown command fan %s/%s= %d\n", msg->topic, msg->payload, cmd);
 				}
 				break;
-			
+
 		}
 	}else {
 		MQTT_log( "ERROR! Empty message on %s\n", msg->topic);
@@ -447,7 +504,11 @@ my_connect_callback(struct mosquitto *mosq, void *userdata, int result)
 		/*mosquitto_subscribe(mosq, NULL, "/guernika/network/stations", 0);*/
 		MQTT_printf("Connected sucessfully %s\n", myMQTT_conf.mqtt_host);
 	} else {
-		MQTT_printf("Connect failed to %s\n", myMQTT_conf.mqtt_host);
+		MQTT_printf("Connect failed to %s:%s@%s:%d\n", 
+				myMQTT_conf.mqtt_user,
+				myMQTT_conf.mqtt_password,
+				myMQTT_conf.mqtt_host, 
+				myMQTT_conf.mqtt_port);
 	}
 	return;
 }
@@ -473,13 +534,25 @@ MQTT_init(mqtt_hnd_t *m, bool c_sess, const char *id)
 	mosquitto_username_pw_set(m->mqh_mos, NULL, NULL);
 
 	register_callbacks(m->mqh_mos);
-	
+
 	if ((mosq_ret = mosquitto_connect(m->mqh_mos, myMQTT_conf.mqtt_host, myMQTT_conf.mqtt_port, 600)) == MOSQ_ERR_SUCCESS) {
 		return (m->mqh_mos);
 	} else {
 		MQTT_log( "MQTT connect failure! %d %s\n", mosq_ret, strerror(errno));
 	}
 	return (NULL);
+}
+
+static struct mosquitto *
+MQTT_reconnect(struct mosquitto *m, int *ret)
+{
+	int	mosq_ret;
+  MQTT_log("Reconnecting");
+	if ((mosq_ret = mosquitto_reconnect(m)) != MOSQ_ERR_SUCCESS) {
+		if (ret != NULL) *ret = mosq_ret;
+		return (NULL);
+	}
+	return (m);
 }
 
 static void
@@ -493,7 +566,7 @@ register_callbacks(struct mosquitto *mosq)
 	return;
 }
 
-static int  
+static int
 MQTT_pub(struct mosquitto *mosq, const char *topic, bool perm, const char *fmt, ...)
 {
 	size_t msglen;
@@ -502,6 +575,7 @@ MQTT_pub(struct mosquitto *mosq, const char *topic, bool perm, const char *fmt, 
 	int	mid = 0;
 	int	ret;
 
+  if (mqtt_conn_dead) return (0);
 	va_start(lst, fmt);
 	vsnprintf(msgbuf, sizeof msgbuf, fmt, lst);
 	va_end(lst);
@@ -515,7 +589,7 @@ MQTT_pub(struct mosquitto *mosq, const char *topic, bool perm, const char *fmt, 
 	return (ret);
 }
 
-static int 
+static int
 MQTT_sub(struct mosquitto *m, const char *fmt_topic, ...)
 {
 	int msgid = 0;
@@ -526,7 +600,7 @@ MQTT_sub(struct mosquitto *m, const char *fmt_topic, ...)
 	va_start(lst, fmt_topic);
 	vsnprintf(msgbuf, sizeof msgbuf, fmt_topic, lst);
 	va_end(lst);
-	
+
 	if ((ret = mosquitto_subscribe(m, &msgid, msgbuf, 0)) == MOSQ_ERR_SUCCESS)
 		ret = msgid;
 	else
@@ -536,17 +610,17 @@ MQTT_sub(struct mosquitto *m, const char *fmt_topic, ...)
 }
 
 
-static bool 
+static bool
 mqtt_rpi_init(const char *progname, char *conf)
 {
 	bool   ret = true;
 	char  *configfile, *bufp, *p;
 	struct sigaction sa;
-	
+
 	bufp = malloc(HOST_NAME_MAX);
 	if (gethostname(bufp, HOST_NAME_MAX) != -1) {
 		__HOSTNAME = bufp;
-	} else 
+	} else
 		__HOSTNAME = "nil";
 
 	/*p = basename(progname);*/
@@ -570,6 +644,7 @@ mqtt_rpi_init(const char *progname, char *conf)
 	signal(SIGQUIT, sig_hnd);
 	signal(SIGUSR1, sig_hnd);
 	signal(SIGTERM, sig_hnd);
+	signal(SIGCHLD, sig_hnd);
 	signal(SIGHUP, sig_hnd);
 	/*  /sa.sa_handler = sig_hnd;*/
 	sa.sa_sigaction = siginfo;
@@ -583,12 +658,36 @@ mqtt_rpi_init(const char *progname, char *conf)
 		ret = false;
 	return (ret);
 }
+/*
+ * fork()/exec() an instance of mqttpir
+ */
+static int 
+fork_mqtt_pir(mqtt_hnd_t *mqh)
+{
+	pid_t 	chpid;
+	int     wstatus;
+#define MQTT_PIR_PATH     "/home/jez/repos/pigoda/mqtt_rpi/mqttpir/mqttpir"
+	switch((chpid = fork())) {
+		case 0: /* XXX hardcoded path */
+			execlp(MQTT_PIR_PATH, MQTT_PIR_PATH, NULL);
+			MQTT_log("Failed to exec %s: %s", MQTT_PIR_PATH, strerror(errno));
+			exit(0);
+			break;
+		case -1:
+			MQTT_log("Failed to fork/exec mqttpir");
+			break;
+		default:
+			MQTT_log("Forked mqttpir with pid=%d", chpid);
+			mqh->mqh_mqttpir_pid = chpid;
+	}
+	return (chpid);
+}
 
 
 /*
  * returns -1 on fail, 0 on success
  */
-static int 
+static int
 pool_sensors(struct mosquitto *mosq)
 {
 	int ret = 0;
@@ -614,7 +713,7 @@ pool_sensors(struct mosquitto *mosq)
 	if ((temp_out = get_temperature("28-000005d3355e")) != -1) {
 		if (MQTT_pub(mosq, "/guernika/environment/tempout", true, "%f", temp_out) == -1) {
 			MQTT_log("Failed to publish tempout\n");
-			return (-1);
+			
 		}
 	} else {
 		MQTT_log("Failed to get tempout: %s\n", strerror(errno));
@@ -631,7 +730,7 @@ pool_sensors(struct mosquitto *mosq)
 
 
 
-static int 
+static int
 set_logging(mqtt_global_cfg_t *myconf)
 {
 	int ret = 0;
@@ -651,7 +750,7 @@ set_logging(mqtt_global_cfg_t *myconf)
 
 }
 
-static void 
+static void
 sig_hnd(int sig)
 {
 	switch (sig) {
@@ -664,6 +763,9 @@ sig_hnd(int sig)
 		case SIGUSR1:
 			got_SIGUSR1 = 1;
 			break;
+		case SIGCHLD:
+			got_SIGCHLD = 1;
+			break;
 		default:
 			fprintf(stderr, "got unknown signal %s\n", strsignal(sig));
 			fflush(stderr);
@@ -672,7 +774,7 @@ sig_hnd(int sig)
 	return;
 }
 
-static void 
+static void
 siginfo(int signo, siginfo_t *info, void *context)
 {
 	fprintf(stdout, "%d %s %s\n", signo, context, strsignal(signo));
@@ -681,7 +783,7 @@ siginfo(int signo, siginfo_t *info, void *context)
 	return ;
 }
 
-static int 
+static int
 MQTT_log(const char *fmt, ...)
 {
 	va_list vargs;
@@ -692,7 +794,7 @@ MQTT_log(const char *fmt, ...)
 	struct tm *tmp;
 
 
-	
+
 	time(&curtime);
 	tmp = localtime(&curtime);
 	strftime(timebuf, sizeof timebuf, "%H:%M:%S %d-%m-%y %z", tmp);
@@ -702,7 +804,7 @@ MQTT_log(const char *fmt, ...)
 	if ((p = strrchr(pbuf, '\n')) != NULL) {
 		*p = '\0';
 	}
-	/* 
+	/*
 	 * switch (logtype) {
 	 * 	case LOG_FILE:
 	 * 	...
@@ -712,7 +814,7 @@ MQTT_log(const char *fmt, ...)
 	return (ret);
 }
 
-static int 
+static int
 MQTT_printf(const char *fmt, ...)
 {
 	va_list vargs;
@@ -723,12 +825,12 @@ MQTT_printf(const char *fmt, ...)
 
 	fmtbuf = strdup(fmt);
 	fmtlen = strlen(fmtbuf);
-	/*    
+	/*
 	*(fmtbuf+fmtlen) = '\0';
 	fmtlen--;
 	*(fmtbuf+fmtlen) = '\0';
 	*/
-	
+
 	va_start(vargs, fmt);
 	ret = vsnprintf(pbuf, sizeof pbuf, fmt, vargs);
 	va_end(vargs);
@@ -748,4 +850,3 @@ usage(void)
 	fprintf(stderr, "usage: %s\n", __PROGNAME);
 	exit(64);
 }
-

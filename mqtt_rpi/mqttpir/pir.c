@@ -1,3 +1,6 @@
+/*
+ *
+ */
 #include <wiringPi.h>
 #include <softPwm.h>
 
@@ -16,17 +19,17 @@ main(int argc, char **argv)
 	int val;
 	struct mosquitto *m;
 
-	printf("\tRev. %d\n", piBoardRev());
 
 	if (argc < 2 ) {
 		printf("usage: [pwm]\n");
 		printf("PIR pin defaults to %d\n", pinnum);
+		printf("\tRev. %d\n", piBoardRev());
 	} else {
 		pinnum = atoi(argv[1]);
 	}
 	mosquitto_lib_init();
 	m= mosquitto_new("pir_sensors", true, NULL);
-	mosquitto_connect(m, "172.17.17.1", 1883, 300);
+	mosquitto_connect(m, "mail.obin.org", 1883, 300);
          	
 	wiringPiSetup();
 
