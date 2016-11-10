@@ -16,7 +16,7 @@
 #include <mosquitto.h>
 void my_connect_callback(struct mosquitto *, void *, int);
 int
-main(void)
+main(int argc, char **argv)
 {
 	struct mosquitto *m;
 	int mlret = 0;
@@ -26,12 +26,15 @@ main(void)
 
 	m = mosquitto_new("komar", false, NULL);
 
-
-	mosquitto_username_pw_set(m, "jez", "bzzz.8");
+	if (argc < 2) {
+		printf("too few arguments\n");
+		exit (64);
+	}
+	mosquitto_username_pw_set(m, "jez", argv[2]);
 	mosquitto_connect_callback_set(m, my_connect_callback);
+	
 
-
-	switch (mosquitto_connect(m, "mail.obin.org", 1883, 120)) {
+	switch (mosquitto_connect(m, argv[1] , 1883, 120)) {
 		case MOSQ_ERR_SUCCESS:
 			printf("connection ok\n");
 			break;
