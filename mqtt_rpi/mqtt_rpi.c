@@ -29,6 +29,7 @@
 #include "mqtt_wiringpi.h"
 #ifdef MQTTDEBUG
 
+static bool mqtt_connected = false;
 static unsigned short DEBUG_FLAG=0x4;
 /*  /static unsigned short DEBUG_MODE=0x0;*/
 #define dprintf if (DEBUG_FLAG) printf
@@ -173,7 +174,7 @@ main(int argc, char **argv)
 	MQTT_log("Sensors init");
 	sensors_init(); /* wiringPiSetup() */
 	MQTT_log("Led act init");
-	startup_led_act(100); /*  XXX ugly hack with magic number.
+	startup_led_act(1); /*  XXX ugly hack with magic number.
 				 It has a magic number which is just to wait until
 				 the NIC settles up, it takes a while and i preassume
 				 that inmediate data acquisition after reboot is not
@@ -181,7 +182,6 @@ main(int argc, char **argv)
 				 */
 	MQTT_log("bmp85 init");
 	bmp85_init();
-
 	startup_fanctl();
 	if ((mosq = MQTT_init(&Mosquitto, false, __PROGNAME)) == NULL) {
 		fprintf(stderr, "%s: failed to init MQTT protocol \n", __PROGNAME);
@@ -194,13 +194,15 @@ main(int argc, char **argv)
 		exit(3);
 
 	}
+	/*
 	MQTT_log("Subscribe to /guernika/%s/cmd/#", __HOSTNAME);
 	MQTT_sub(Mosquitto.mqh_mos, "/guernika/%s/cmd/#", __HOSTNAME);
 	MQTT_log("FAN act init");
+	*/
 
 	while (main_loop) {
 		/* -1 = 1000ms /  0 = instant return */
-		while((mqloopret = MQTT_loop(mosq, 0)) != MOSQ_ERR_SUCCESS) {
+		while((mqloopret = MQTT_loop(mosq, 3000)) != MOSQ_ERR_SUCCESS) {
 			if (mqloopret == MOSQ_ERR_CONN_LOST || mqloopret == MOSQ_ERR_NO_CONN) {
 				term_led_act(1);/* value 1 indicates failure */
 				break;
@@ -226,15 +228,15 @@ main(int argc, char **argv)
 		}
 
 		if (mqtt_conn_dead) {
-				if (MQTT_reconnect(mosq, NULL) != NULL) {
-					MQTT_log("Reconnect success!");
-					mqtt_conn_dead = false;
-					do_pool_sensors = true;
-					startup_led_act(10); /*  XXX ugly hack*/
-				} else {
-					MQTT_log("Reconnect failure! Waiting 5secs");
-					sleep(5);
-				}
+			if (MQTT_reconnect(mosq, NULL) != NULL) {
+				MQTT_log("Reconnect success!");
+				mqtt_conn_dead = false;
+				do_pool_sensors = true;
+				startup_led_act(10); /*  XXX ugly hack*/
+			} else {
+				MQTT_log("Reconnect failure! Waiting 5secs");
+				sleep(5);
+			}
 		}
 		if (got_SIGTERM) {
 			main_loop = false;
@@ -323,7 +325,8 @@ MQTT_loop(void *m, int tout)
 				break;
 			case MOSQ_ERR_CONN_REFUSED:
 				MQTT_log( "Connection refused\n");
-				main_loop = false;
+				mqtt_conn_dead = true;/* XXX temporal */
+				/*main_loop = false;*/
 				break;
 			default:
 				MQTT_log( "unknown ret code %d\n", ret);
@@ -493,22 +496,29 @@ my_message_callback(struct mosquitto *mosq, void *userdata, const struct mosquit
 }
 
 static void
-my_connect_callback(struct mosquitto *mosq, void *userdata, int result)
+my_connect_callback(struct mosquitto *mosq, void *userdata, int retcode)
 {
 	int i;
 
-	if(!result){
+	if(!retcode){
 		/* Subscribe to broker information topics on successful connect. */
 		MQTT_sub(mosq, "/guernika/IoT#");
 		/*  /mosquitto_subscribe(mosq, NULL, "/guernika/#", 0);*/
 		/*mosquitto_subscribe(mosq, NULL, "/guernika/network/stations", 0);*/
 		MQTT_printf("Connected sucessfully %s\n", myMQTT_conf.mqtt_host);
+		mqtt_connected = true;
+	} else if (retcode == 1) {
+		MQTT_printf("Connection refused due unacceptable protocol version.\n");
+	} else if (retcode == 2) {
+		MQTT_printf("Connection refused. Identifier rejected.\n");
+	} else if (retcode == 3) {
+		MQTT_printf("Connection refused. Broker unavailable.\n");
 	} else {
-		MQTT_printf("Connect failed to %s:%s@%s:%d\n", 
+		MQTT_printf("Connect failed to (%s:%s@%s:%d) for unknown reason %d\n", 
 				myMQTT_conf.mqtt_user,
 				myMQTT_conf.mqtt_password,
 				myMQTT_conf.mqtt_host, 
-				myMQTT_conf.mqtt_port);
+				myMQTT_conf.mqtt_port, retcode);
 	}
 	return;
 }
@@ -573,19 +583,21 @@ MQTT_pub(struct mosquitto *mosq, const char *topic, bool perm, const char *fmt, 
 	va_list lst;
 	char	msgbuf[BUFSIZ];
 	int	mid = 0;
-	int	ret;
+	int	ret, pubret;
 
-  if (mqtt_conn_dead) return (0);
+        if (mqtt_conn_dead || ! mqtt_connected) return (0);
 	va_start(lst, fmt);
 	vsnprintf(msgbuf, sizeof msgbuf, fmt, lst);
 	va_end(lst);
 	msglen = strlen(msgbuf);
 	/*mosquitto_publish(mosq, NULL, "/guernika/network/broadcast", 3, Mosquitto.mqh_msgbuf, 0, false);*/
-	if (mosquitto_publish(mosq, &mid, topic, msglen, msgbuf, 0, perm) == MOSQ_ERR_SUCCESS) {
+	if ((pubret = mosquitto_publish(mosq, &mid, topic, msglen, msgbuf, 0, perm)) == MOSQ_ERR_SUCCESS) {
 		ret = mid;
 		MQTT_stat.mqs_last_pub_mid = mid;
-	} else
+	} else {
+		MQTT_printf("Publish error on %s \n", mosquitto_strerror(pubret));
 		ret = -1;
+	}
 	return (ret);
 }
 
@@ -695,15 +707,16 @@ pool_sensors(struct mosquitto *mosq)
 	float temp_in=0, temp_out = 0;
 	double pressure=0;
 
+
 	light = pcf8591p_ain(0);
-	if (MQTT_pub(mosq, "/guernika/environment/light", true, "%d", light) == -1) {
-		MQTT_log("Failed to publish light\n");
+	if ((ret = MQTT_pub(mosq, "/guernika/environment/light", true, "%d", light)) == -1) {
+		MQTT_log("Failed to publish light %s\n", mosquitto_strerror(ret));
 		return (-1);
 	}
 
 	if ((temp_in = get_temperature("28-0000055a8be7")) != -1) {
-		if (MQTT_pub(mosq, "/guernika/environment/tempin", true, "%f", temp_in) == -1) {
-			MQTT_log("Failed to publish tempin\n");
+		if ((ret = MQTT_pub(mosq, "/guernika/environment/tempin", true, "%f", temp_in)) == -1) {
+			MQTT_log("Failed to publish tempin %s\n", mosquitto_strerror(ret));
 			return (-1);
 		}
 	} else {
@@ -711,8 +724,8 @@ pool_sensors(struct mosquitto *mosq)
 		ret = -1;
 	}
 	if ((temp_out = get_temperature("28-000005d3355e")) != -1) {
-		if (MQTT_pub(mosq, "/guernika/environment/tempout", true, "%f", temp_out) == -1) {
-			MQTT_log("Failed to publish tempout\n");
+		if ((ret = MQTT_pub(mosq, "/guernika/environment/tempout", true, "%f", temp_out)) == -1) {
+			MQTT_log("Failed to publish tempout %s\n", mosquitto_strerror(ret));
 			
 		}
 	} else {
@@ -721,7 +734,7 @@ pool_sensors(struct mosquitto *mosq)
 	}
 
 	pressure=get_pressure();
-	if (MQTT_pub(mosq, "/guernika/environment/pressure", true, "%0.2f", pressure) == -1) {
+	if ((MQTT_pub(mosq, "/guernika/environment/pressure", true, "%0.2f", pressure)) == -1) {
 		MQTT_log("Failed to publish pressure\n");
 		ret = -1;
 	}
