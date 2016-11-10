@@ -194,15 +194,17 @@ main(int argc, char **argv)
 		exit(3);
 
 	}
-	/*
+	
 	MQTT_log("Subscribe to /guernika/%s/cmd/#", __HOSTNAME);
 	MQTT_sub(Mosquitto.mqh_mos, "/guernika/%s/cmd/#", __HOSTNAME);
+	
+	/*
 	MQTT_log("FAN act init");
 	*/
 
 	while (main_loop) {
 		/* -1 = 1000ms /  0 = instant return */
-		while((mqloopret = MQTT_loop(mosq, 3000)) != MOSQ_ERR_SUCCESS) {
+		while((mqloopret = MQTT_loop(mosq, 4000)) != MOSQ_ERR_SUCCESS) {
 			if (mqloopret == MOSQ_ERR_CONN_LOST || mqloopret == MOSQ_ERR_NO_CONN) {
 				term_led_act(1);/* value 1 indicates failure */
 				break;
@@ -280,7 +282,8 @@ MQTT_loop(void *m, int tout)
 {
 	struct mosquitto *mos = (struct mosquitto *) m;
 	int	ret = 0;
-  if (mqtt_conn_dead) {
+
+  	if (mqtt_conn_dead) {
 		return (MOSQ_ERR_SUCCESS);
 	}
 	ret = mosquitto_loop(mos, tout, 1);
@@ -552,7 +555,7 @@ MQTT_init(mqtt_hnd_t *m, bool c_sess, const char *id)
 		return (NULL);
 
 		/*  XXX */
-	mosquitto_username_pw_set(m->mqh_mos, NULL, NULL);
+	mosquitto_username_pw_set(m->mqh_mos, myMQTT_conf.mqtt_user, myMQTT_conf.mqtt_password);
 
 	register_callbacks(m->mqh_mos);
 
