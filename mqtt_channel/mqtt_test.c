@@ -26,15 +26,16 @@ main(int argc, char **argv)
 
 	m = mosquitto_new("komar", false, NULL);
 
-	if (argc < 2) {
-		printf("too few arguments\n");
+	if (argc < 3) {
+		printf("too few arguments \n");
+		printf("usage: mqtt_test [user] [password] [host]\n");
 		exit (64);
 	}
-	mosquitto_username_pw_set(m, "jez", argv[2]);
+	mosquitto_username_pw_set(m, argv[1], argv[2]);
 	mosquitto_connect_callback_set(m, my_connect_callback);
 	
 
-	switch (mosquitto_connect(m, argv[1] , 1883, 120)) {
+	switch (mosquitto_connect(m, argv[3] , 1883, 120)) {
 		case MOSQ_ERR_SUCCESS:
 			printf("connection ok\n");
 			break;
