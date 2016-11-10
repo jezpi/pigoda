@@ -57,5 +57,8 @@ test: mqttc parser
 stop:
 	/etc/init.d/pigoda stop
 
-runlocal:
+runlocal: mqtt_rpi
 	./mqtt_rpi ./mqtt_rpi.yaml
+
+gdb: mqtt_rpi
+	gdb ./mqtt_rpi 
