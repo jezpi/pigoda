@@ -507,18 +507,29 @@ my_connect_callback(struct mosquitto *mosq, void *userdata, int retcode)
 		/*mosquitto_subscribe(mosq, NULL, "/guernika/network/stations", 0);*/
 		MQTT_printf("Connected sucessfully %s\n", myMQTT_conf.mqtt_host);
 		mqtt_connected = true;
-	} else if (retcode == 1) {
-		MQTT_printf("Connection refused due unacceptable protocol version.\n");
-	} else if (retcode == 2) {
-		MQTT_printf("Connection refused. Identifier rejected.\n");
-	} else if (retcode == 3) {
-		MQTT_printf("Connection refused. Broker unavailable.\n");
-	} else {
-		MQTT_printf("Connect failed to (%s:%s@%s:%d) for unknown reason %d\n", 
-				myMQTT_conf.mqtt_user,
-				myMQTT_conf.mqtt_password,
-				myMQTT_conf.mqtt_host, 
-				myMQTT_conf.mqtt_port, retcode);
+	} else { 
+		mqtt_connected = false;
+
+		switch (retcode) {
+			case CONNACK_REFUSED_PROTOCOL_VERSION:
+				MQTT_log("CONNACK failure. Protocol version was refused.\n");
+				break;
+			case CONNACK_REFUSED_IDENTIFIER_REJECTED:
+				MQTT_log("CONNACK failure. Idnetifier has been rejected.\n");
+				break;
+			case CONNACK_REFUSED_SERVER_UNAVAILABLE:
+				MQTT_log("CONNACK failure. Server unavailable.\n");
+				break;
+			case CONNACK_REFUSED_BAD_USERNAME_PASSWORD:
+				MQTT_log("CONNACK failure. username (%s) or password incorrect.\n", myMQTT_conf.mqtt_user);
+				break;
+			case CONNACK_REFUSED_NOT_AUTHORIZED:
+				MQTT_log("CONNACK failure. Not authorized.\n");
+				break;
+			default:
+				MQTT_log("Unknown CONNACK error!\n");
+		}
+
 	}
 	return;
 }
