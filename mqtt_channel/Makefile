@@ -34,3 +34,14 @@ parser: mqtt_parse_config.o mqtt_parser_test.o
 install: mqtt_channel
 	install -m 755 -o root mqtt_channel /usr/bin/
 	install -m 644 -o root mqtt_channel.yaml /etc/
+
+run: mqtt_channel
+	./mqtt_channel ./mqtt_channel.yaml
+
+mqtt_test.o: mqtt_test.c
+	$(CC) $(DFLAGS) $(CFLAGS) -pipe -c $<
+
+mqtt_test: mqtt_test.o
+	$(CC) -o $@ $+ $(LDFLAGS)
+	./mqtt_test
+
