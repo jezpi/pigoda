@@ -204,7 +204,7 @@ main(int argc, char **argv)
 
 	while (main_loop) {
 		/* -1 = 1000ms /  0 = instant return */
-		while((mqloopret = MQTT_loop(mosq, 4000)) != MOSQ_ERR_SUCCESS) {
+		while((mqloopret = MQTT_loop(mosq, 0)) != MOSQ_ERR_SUCCESS) {
 			if (mqloopret == MOSQ_ERR_CONN_LOST || mqloopret == MOSQ_ERR_NO_CONN) {
 				term_led_act(1);/* value 1 indicates failure */
 				break;
