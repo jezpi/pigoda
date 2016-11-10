@@ -120,7 +120,7 @@ static void my_connect_callback(struct mosquitto *, void *, int);
 static void register_callbacks(struct mosquitto *);
 
 static struct mosquitto * MQTT_init(mqtt_hnd_t *, bool, const char *) ;
-static int MQTT_loop(void *m, int);
+static int MQTT_loop(void *, int);
 static int  MQTT_pub(struct mosquitto *mosq, const char *topic, bool, const char *, ...);
 static int MQTT_sub(struct  mosquitto *m, const char *topic_fmt, ...);
 int MQTT_printf(const char *, ...);
@@ -184,16 +184,11 @@ main(int argc, char **argv)
 	sqlitedb = MQTT_initdb("/var/db/pigoda/sensors.db");
 
 	init_screen(&screen_data);
-	MQTT_sub(Mosquitto.mqh_mos, "/guernika/environment/#");
 	TSMQTT = MQTT_to_ts_init("YLW6C8UWBXKWMEXZ", 10709);
 
 	while (main_loop) {
-		/* -1 = 1000ms /  0 = instant return */
-		while((mqloopret = MQTT_loop(mosq, 0)) != MOSQ_ERR_SUCCESS) {
-			if (first_run) {
-				MQTT_pub(mosq, "/guernika/network/broadcast/mqtt_graph", true, "on");
-				first_run = false;
-			}
+		/* -1 = 1000ms ,  0 = instant return */
+		while((mqloopret = MQTT_loop(mosq, 1000)) != MOSQ_ERR_SUCCESS) {
 			if (got_SIGUSR1) {
 				MQTT_pub(mosq, "/guernika/network/broadcast/mqtt_graph/user", false, "user_signal");
 				got_SIGUSR1 = 0;
@@ -203,6 +198,12 @@ main(int argc, char **argv)
 			}
 		}
 
+			if (first_run) {
+				MQTT_sub(Mosquitto.mqh_mos, "/guernika/environment/#");
+				MQTT_sub(mosq, "/guernika/IoT#");
+				MQTT_pub(mosq, "/guernika/network/broadcast/mqtt_graph", true, "on");
+				first_run = false;
+			}
 		if (mqtt_conn_dead) {
 				if (MQTT_reconnect(mosq, NULL) != NULL) {
 					MQTT_log("Reconnect success!");
@@ -238,9 +239,14 @@ main(int argc, char **argv)
 	return (0);
 }
 
-
+/*
+ * Call of mosquitto_loop used to select(2).
+ * it wraps third argument of mosquitto_loop
+ * the first argument void *m is casted to struct mosquitto
+ * the second argument is a timeout expressed in milliseconds.
+ */
 static int
-MQTT_loop(void *m, int tout)
+MQTT_loop(void *m, int timeout)
 {
 	struct mosquitto *mos = (struct mosquitto *) m;
 	int	ret = 0;
@@ -248,16 +254,15 @@ MQTT_loop(void *m, int tout)
 	if (mqtt_conn_dead) {
 		return (MOSQ_ERR_SUCCESS);
 	}
-	ret = mosquitto_loop(mos, tout, 1);
+	ret = mosquitto_loop(mos, timeout, 1);
 	if (ret != MOSQ_ERR_SUCCESS) {
 		fprintf(logfile, "%s(): %s %d\n", __func__, strerror(errno), ret);
 		fflush(logfile);
 	}
 
 		switch (ret) {
-			case MOSQ_ERR_ERRNO:
-				MQTT_printf("Error %s\n", strerror(errno));
-				main_loop = false;
+			case MOSQ_ERR_SUCCESS:
+				;
 				break;
 			case MOSQ_ERR_INVAL:
 				MQTT_printf( "Input parametrs invalid\n");
@@ -267,12 +272,20 @@ MQTT_loop(void *m, int tout)
 				MQTT_printf( "Memory condition\n");
 				main_loop = false;
 				break;
+			case MOSQ_ERR_NO_CONN:
+				MQTT_printf( "The client isn't connected to the broker\n");
+				main_loop = false;
+				break;
 			case MOSQ_ERR_CONN_LOST:
-				MQTT_printf( "Connection lost\n");
+				MQTT_printf( "Connection to the broker lost\n");
 				mqtt_conn_dead = true;
 				break;
-			case MOSQ_ERR_SUCCESS:
-				;
+			case MOSQ_ERR_PROTOCOL:
+				MQTT_printf( "Protocol error in communication with broker\n");
+				break;
+			case MOSQ_ERR_ERRNO:
+				MQTT_printf("System call error errno=%s\n", strerror(errno));
+				main_loop = false;
 				break;
 			default:
 				MQTT_printf( "Unknown ret code %d\n", ret);
@@ -536,14 +549,32 @@ my_connect_callback(struct mosquitto *mosq, void *userdata, int result)
 {
 	int i;
 
-	if(!result){
+	if (!result){
 		/* Subscribe to broker information topics on successful connect. */
-		//MQTT_sub(mosq, "/guernika/IoT#");
 		/*  /mosquitto_subscribe(mosq, NULL, "/guernika/#", 0);*/
 		/*mosquitto_subscribe(mosq, NULL, "/guernika/network/stations", 0);*/
-		MQTT_printf("Connected sucessfully %s\n", myMQTT_conf.mqtt_host);
+		MQTT_log("Connected sucessfully %s\n", myMQTT_conf.mqtt_host);
 	} else {
-		MQTT_printf("Connect failed to %s\n", myMQTT_conf.mqtt_host);
+		switch (result) {
+			case CONNACK_REFUSED_PROTOCOL_VERSION:
+				MQTT_log("CONNACK failure. Protocol version was refused.\n");
+				break;
+			case CONNACK_REFUSED_IDENTIFIER_REJECTED:
+				MQTT_log("CONNACK failure. Idnetifier has been rejected.\n");
+				break;
+			case CONNACK_REFUSED_SERVER_UNAVAILABLE:
+				MQTT_log("CONNACK failure. Server unavailable.\n");
+				break;
+			case CONNACK_REFUSED_BAD_USERNAME_PASSWORD:
+				MQTT_log("CONNACK failure. username or password incorrect.\n");
+
+				break;
+			case CONNACK_REFUSED_NOT_AUTHORIZED:
+				MQTT_log("CONNACK failure. Not authorized.\n");
+				break;
+			default:
+				MQTT_log("Unknown CONNACK error!\n");
+		}
 	}
 	return;
 }
