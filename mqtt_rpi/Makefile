@@ -55,9 +55,10 @@ test: mqttc parser
 	@echo "Building: \""$*"\""
 
 stop:
-	/etc/init.d/pigoda stop
+	echo "Stopping mqtt_rpi"
+	@/etc/init.d/pigoda stop
 
-runlocal: mqtt_rpi
+run: mqtt_rpi
 	./mqtt_rpi ./mqtt_rpi.yaml
 
 gdb: mqtt_rpi

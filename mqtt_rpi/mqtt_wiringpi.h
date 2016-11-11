@@ -7,7 +7,7 @@
 #define FAN_OFF 0x2
 extern int startup_fanctl();
 extern int fanctl(short, int *);
-extern int startup_led_act(int);
+extern int startup_led_act(int, int);
 extern int term_led_act(short) ;
 extern int flash_led(short, int);
 

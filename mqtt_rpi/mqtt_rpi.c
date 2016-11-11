@@ -174,7 +174,7 @@ main(int argc, char **argv)
 	MQTT_log("Sensors init");
 	sensors_init(); /* wiringPiSetup() */
 	MQTT_log("Led act init");
-	startup_led_act(1); /*  XXX ugly hack with magic number.
+	startup_led_act(10, 100); /*  XXX ugly hack with magic number.
 				 It has a magic number which is just to wait until
 				 the NIC settles up, it takes a while and i preassume
 				 that inmediate data acquisition after reboot is not
@@ -194,15 +194,17 @@ main(int argc, char **argv)
 		exit(3);
 
 	}
-	/*
+	
 	MQTT_log("Subscribe to /guernika/%s/cmd/#", __HOSTNAME);
 	MQTT_sub(Mosquitto.mqh_mos, "/guernika/%s/cmd/#", __HOSTNAME);
+	
+	/*
 	MQTT_log("FAN act init");
 	*/
 
 	while (main_loop) {
 		/* -1 = 1000ms /  0 = instant return */
-		while((mqloopret = MQTT_loop(mosq, 3000)) != MOSQ_ERR_SUCCESS) {
+		while((mqloopret = MQTT_loop(mosq, 0)) != MOSQ_ERR_SUCCESS) {
 			if (mqloopret == MOSQ_ERR_CONN_LOST || mqloopret == MOSQ_ERR_NO_CONN) {
 				term_led_act(1);/* value 1 indicates failure */
 				break;
@@ -232,7 +234,7 @@ main(int argc, char **argv)
 				MQTT_log("Reconnect success!");
 				mqtt_conn_dead = false;
 				do_pool_sensors = true;
-				startup_led_act(10); /*  XXX ugly hack*/
+				startup_led_act(10, 10); /*  XXX ugly hack*/
 			} else {
 				MQTT_log("Reconnect failure! Waiting 5secs");
 				sleep(5);
@@ -280,7 +282,8 @@ MQTT_loop(void *m, int tout)
 {
 	struct mosquitto *mos = (struct mosquitto *) m;
 	int	ret = 0;
-  if (mqtt_conn_dead) {
+
+  	if (mqtt_conn_dead) {
 		return (MOSQ_ERR_SUCCESS);
 	}
 	ret = mosquitto_loop(mos, tout, 1);
@@ -552,7 +555,7 @@ MQTT_init(mqtt_hnd_t *m, bool c_sess, const char *id)
 		return (NULL);
 
 		/*  XXX */
-	mosquitto_username_pw_set(m->mqh_mos, NULL, NULL);
+	mosquitto_username_pw_set(m->mqh_mos, myMQTT_conf.mqtt_user, myMQTT_conf.mqtt_password);
 
 	register_callbacks(m->mqh_mos);
 
