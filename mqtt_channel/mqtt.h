@@ -1,8 +1,8 @@
 /*
  * $Id$
  */
-#ifndef _MQTTC_H_
-#define  _MQTTC_H_
+#ifndef _MQTT_H_
+#define  _MQTT_H_
 
 typedef struct mqtt_global_config_t {
 	const char *pidfile;
@@ -13,7 +13,6 @@ typedef struct mqtt_global_config_t {
 	const char *mqtt_password;
 	unsigned short mqtt_port;
 	char *mqtt_channels[100];
-	
 } mqtt_global_cfg_t;
 
 #define DEFAULT_CONFIG_FILE	"/etc/mqtt_channel.yaml"
@@ -30,4 +29,4 @@ extern int parse_configfile(const char *, mqtt_global_cfg_t *);
 
 
 
-#endif /*  ! _MQTTC_H_ */
+#endif /*  ! _MQTT_H_ */
