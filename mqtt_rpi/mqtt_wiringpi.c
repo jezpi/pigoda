@@ -22,38 +22,12 @@
 
 #include <wiringPi.h>
 #include "mqtt_wiringpi.h"
-/*
-int
-main(int argc, char **argv)
-{
-	char *cmd = NULL;
-	int pin = 6;
 
-  wiringPiSetup ();
-  pinMode(pin, OUTPUT);
-
-  if (argc > 1) {
-	  cmd = argv[1];
-  }
-  if (cmd == NULL) {
-	  printf("unknown command!\n");
-	  cmd = "NULL";
-  } else if (!strncmp(cmd, "high", 4)) {
-
-  	digitalWrite(pin, HIGH);
-  } else if (!strncmp(cmd, "low", 3)) {
-  	digitalWrite(pin, LOW);
-  } 
-
-  printf("pin %d set %s \tRev. %d\n", pin, cmd, piBoardRev());
-	return (0);
-}
-*/
 static const unsigned short red_led_pin = 0;
 static const unsigned short green_led_pin = 2;
 
 int 
-startup_led_act(int ledticks) 
+startup_led_act(int ledticks, int delay) 
 {
 	int n = 0;
 	short ticktack = 1;
@@ -64,15 +38,15 @@ startup_led_act(int ledticks)
 	for (n = 0; n < ledticks; n++ ) {
 		if (ticktack) { 
 			digitalWrite(green_led_pin, LOW);
-			delay(300);
+			delay(delay*3);
 			digitalWrite(green_led_pin, HIGH);
-			delay(100);
+			delay(delay);
 			ticktack = 0;
 		} else {
 			digitalWrite(0, LOW);
-			delay(300);
+			delay(delay*3);
 			digitalWrite(0, HIGH);
-			delay(100);
+			delay(delay);
 			ticktack = 1;
 		}
 
