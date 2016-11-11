@@ -27,7 +27,7 @@ static const unsigned short red_led_pin = 0;
 static const unsigned short green_led_pin = 2;
 
 int 
-startup_led_act(int ledticks, int delay) 
+startup_led_act(int ledticks, int blink_delay) 
 {
 	int n = 0;
 	short ticktack = 1;
@@ -38,15 +38,15 @@ startup_led_act(int ledticks, int delay)
 	for (n = 0; n < ledticks; n++ ) {
 		if (ticktack) { 
 			digitalWrite(green_led_pin, LOW);
-			delay(delay*3);
+			delay(blink_delay*3);
 			digitalWrite(green_led_pin, HIGH);
-			delay(delay);
+			delay(blink_delay);
 			ticktack = 0;
 		} else {
 			digitalWrite(0, LOW);
-			delay(delay*3);
+			delay(blink_delay*3);
 			digitalWrite(0, HIGH);
-			delay(delay);
+			delay(blink_delay);
 			ticktack = 1;
 		}
 
