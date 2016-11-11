@@ -174,7 +174,7 @@ main(int argc, char **argv)
 	MQTT_log("Sensors init");
 	sensors_init(); /* wiringPiSetup() */
 	MQTT_log("Led act init");
-	startup_led_act(1); /*  XXX ugly hack with magic number.
+	startup_led_act(10, 100); /*  XXX ugly hack with magic number.
 				 It has a magic number which is just to wait until
 				 the NIC settles up, it takes a while and i preassume
 				 that inmediate data acquisition after reboot is not
@@ -234,7 +234,7 @@ main(int argc, char **argv)
 				MQTT_log("Reconnect success!");
 				mqtt_conn_dead = false;
 				do_pool_sensors = true;
-				startup_led_act(10); /*  XXX ugly hack*/
+				startup_led_act(10, 10); /*  XXX ugly hack*/
 			} else {
 				MQTT_log("Reconnect failure! Waiting 5secs");
 				sleep(5);
