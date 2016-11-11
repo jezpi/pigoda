@@ -94,9 +94,11 @@ typedef struct mqtt_hnd {
 	time_t			 mqh_start_time;
 } mqtt_hnd_t;
 
+#ifdef THINGSPEAK
 struct ts_MQTT {
 	ts_context_t *ctx;
 } *TSMQTT;
+#endif
 
 #include "mqtt_cmd.h"
 
@@ -184,13 +186,17 @@ main(int argc, char **argv)
 	sqlitedb = MQTT_initdb("/var/db/pigoda/sensors.db");
 
 	init_screen(&screen_data);
+#ifdef THINGSPEAK
 	TSMQTT = MQTT_to_ts_init("YLW6C8UWBXKWMEXZ", 10709);
+#endif
+	MQTT_sub(Mosquitto.mqh_mos, "/guernika/environment/#");
+	/*MQTT_sub(mosq, "/guernika/IoT#");*/
 
 	while (main_loop) {
 		/* -1 = 1000ms ,  0 = instant return */
-		while((mqloopret = MQTT_loop(mosq, 1000)) != MOSQ_ERR_SUCCESS) {
+		while((mqloopret = MQTT_loop(mosq, 0)) != MOSQ_ERR_SUCCESS) {
 			if (got_SIGUSR1) {
-				MQTT_pub(mosq, "/guernika/network/broadcast/mqtt_graph/user", false, "user_signal");
+				MQTT_pub(mosq, "/guernika/network/broadcast/mqtt_channel/user", false, "user_signal");
 				got_SIGUSR1 = 0;
 			}
 			if (!main_loop) {
@@ -199,9 +205,7 @@ main(int argc, char **argv)
 		}
 
 			if (first_run) {
-				MQTT_sub(Mosquitto.mqh_mos, "/guernika/environment/#");
-				MQTT_sub(mosq, "/guernika/IoT#");
-				MQTT_pub(mosq, "/guernika/network/broadcast/mqtt_graph", true, "on");
+				MQTT_pub(mosq, "/guernika/network/broadcast/mqtt_channel", true, "on");
 				first_run = false;
 			}
 		if (mqtt_conn_dead) {
@@ -217,11 +221,11 @@ main(int argc, char **argv)
 			main_loop = false;
 			/*fprintf(stderr, "%s) got SIGTERM\n", __PROGNAME);*/
 			got_SIGTERM = 0;
-			MQTT_pub(mosq, "/guernika/network/broadcast/mqtt_graph", true, "off");
+			MQTT_pub(mosq, "/guernika/network/broadcast/mqtt_channel", true, "off");
 		}
 		if (proc_command) {
 			proc_command = false;
-			MQTT_pub(mosq, "/guernika/network/mqtt_graph/broadcast", false, "%lu", Mosquitto.mqh_start_time);
+			MQTT_pub(mosq, "/guernika/network/mqtt_channel/broadcast", false, "%lu", Mosquitto.mqh_start_time);
 		}
 
 		update_screen_stats(&screen_data);
@@ -553,7 +557,8 @@ my_connect_callback(struct mosquitto *mosq, void *userdata, int result)
 		/* Subscribe to broker information topics on successful connect. */
 		/*  /mosquitto_subscribe(mosq, NULL, "/guernika/#", 0);*/
 		/*mosquitto_subscribe(mosq, NULL, "/guernika/network/stations", 0);*/
-		MQTT_log("Connected sucessfully %s\n", myMQTT_conf.mqtt_host);
+		MQTT_log("Connected sucessfully %s as %s\n", myMQTT_conf.mqtt_host, myMQTT_conf.mqtt_user);
+		MQTT_printf("Connected sucessfully %s as %s\n", myMQTT_conf.mqtt_host, myMQTT_conf.mqtt_user);
 	} else {
 		switch (result) {
 			case CONNACK_REFUSED_PROTOCOL_VERSION:
@@ -879,6 +884,43 @@ MQTT_log(const char *fmt, ...)
 	 */
 	fprintf(logfile, "%s  %s\n", timebuf, pbuf);
 	fflush(logfile);
+	return (ret);
+}
+
+
+int
+MQTT_debug(const char *fmt, ...)
+{
+	va_list vargs;
+	int 	ret;
+	size_t	fmtlen;
+	char	*fmtbuf, *p;
+	char	pbuf[BUFSIZ];
+
+	fmtbuf = strdup(fmt);
+	fmtlen = strlen(fmtbuf);
+	/*
+	*(fmtbuf+fmtlen) = '\0';
+	fmtlen--;
+	*(fmtbuf+fmtlen) = '\0';
+	*/
+
+	va_start(vargs, fmt);
+	ret = vsnprintf(pbuf, sizeof pbuf, fmt, vargs);
+	va_end(vargs);
+	if ((p = strrchr(pbuf, '\n')) != NULL) {
+		*p = '\0';
+	}
+	/*printf("%s\n", pbuf);*/
+	if (screen_data.win != NULL) {
+		wprintw(screen_data.win, "%s\n", pbuf);
+		wrefresh(screen_data.win);
+	} else
+		fprintf(stderr, "%s\n", pbuf);
+#ifdef MQTTDEBUG
+	fprintf(logfile, "%s\n", pbuf);
+	fflush(logfile);
+#endif
 	return (ret);
 }
 
