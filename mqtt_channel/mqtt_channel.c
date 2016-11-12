@@ -81,7 +81,6 @@ struct mq_ch_screen {
 #define STAT_SQLITE_LIGHT	3
 #define STAT_SQLITE_HUMIDITY	4
 #define STAT_SQLITE_PIR		5
-
 } screen_data;
 
 typedef struct mqtt_hnd {
@@ -143,6 +142,7 @@ static bool mqtt_conn_dead = false;
 
 
 mqtt_cmd_t mqtt_proc_msg(char *, char *);
+char * mqtt_poli_proc_msg(char *, char *);
 
 static int set_logging(mqtt_global_cfg_t *myconf);
 static void sig_hnd(int);
@@ -183,20 +183,20 @@ main(int argc, char **argv)
 		exit(3);
 
 	}
-	sqlitedb = MQTT_initdb("/var/db/pigoda/sensors.db");
+	sqlitedb = MQTT_initdb((myMQTT_conf.sqlite3_db == NULL?"/var/db/pigoda/sensors.db":myMQTT_conf.sqlite3_db));
 
 	init_screen(&screen_data);
 #ifdef THINGSPEAK
 	TSMQTT = MQTT_to_ts_init("YLW6C8UWBXKWMEXZ", 10709);
 #endif
-	MQTT_sub(Mosquitto.mqh_mos, "/guernika/environment/#");
-	/*MQTT_sub(mosq, "/guernika/IoT#");*/
+	MQTT_sub(Mosquitto.mqh_mos, "/environment/#" );
+	/*MQTT_sub(mosq, "/IoT#");*/
 
 	while (main_loop) {
 		/* -1 = 1000ms ,  0 = instant return */
 		while((mqloopret = MQTT_loop(mosq, 0)) != MOSQ_ERR_SUCCESS) {
 			if (got_SIGUSR1) {
-				MQTT_pub(mosq, "/guernika/network/broadcast/mqtt_channel/user", false, "user_signal");
+				MQTT_pub(mosq, "/network/broadcast/mqtt_channel/user", false, "user_signal");
 				got_SIGUSR1 = 0;
 			}
 			if (!main_loop) {
@@ -205,7 +205,7 @@ main(int argc, char **argv)
 		}
 
 			if (first_run) {
-				MQTT_pub(mosq, "/guernika/network/broadcast/mqtt_channel", true, "on");
+				MQTT_pub(mosq, "/network/broadcast/mqtt_channel", true, "on");
 				first_run = false;
 			}
 		if (mqtt_conn_dead) {
@@ -221,11 +221,11 @@ main(int argc, char **argv)
 			main_loop = false;
 			/*fprintf(stderr, "%s) got SIGTERM\n", __PROGNAME);*/
 			got_SIGTERM = 0;
-			MQTT_pub(mosq, "/guernika/network/broadcast/mqtt_channel", true, "off");
+			MQTT_pub(mosq, "/network/broadcast/mqtt_channel", true, "off");
 		}
 		if (proc_command) {
 			proc_command = false;
-			MQTT_pub(mosq, "/guernika/network/mqtt_channel/broadcast", false, "%lu", Mosquitto.mqh_start_time);
+			MQTT_pub(mosq, "/network/mqtt_channel/broadcast", false, "%lu", Mosquitto.mqh_start_time);
 		}
 
 		update_screen_stats(&screen_data);
@@ -235,7 +235,6 @@ main(int argc, char **argv)
 		}
 	  	usleep(155000);
 	}
-
 	MQTT_detachdb(sqlitedb);
 	MQTT_printf("End of work");
 	MQTT_finish(&Mosquitto);
@@ -325,6 +324,48 @@ my_subscribe_callback(struct mosquitto *mosq, void *userdata, int mid, int qos_c
 	MQTT_log( "\n");
 }
 
+char * 
+mqtt_poli_proc_msg(char *topic, char *payload)
+{
+	char	*p;
+	char	*pbuf = strdup(payload);
+	char	*hnam_buf;
+	char	**topics;
+	int	topic_cnt, n;
+	char 	*ret = NULL;
+	enum {ST_BEGIN, ST_LUGAR, ST_ENVIRONMENT, ST_SENSOR, ST_DATA, ST_DONE, ST_ERR} pstate;
+
+	if ((p = strchr(pbuf, '\n')) != NULL)
+		*p = '\0';
+
+	if (mosquitto_sub_topic_tokenise(topic, &topics, &topic_cnt) != MOSQ_ERR_SUCCESS) {
+		return (NULL);
+	}
+	pstate = ST_BEGIN;
+	for (n=0; topic_cnt >= n && pstate != ST_ERR; n++) {
+		switch(n) {
+			case 0:
+				if (topics[0] == NULL)
+					pstate = ST_ENVIRONMENT;
+				break;
+			case 1:
+
+				if (pstate == ST_ENVIRONMENT && !strcasecmp(topics[n], "environment")) {
+					pstate = ST_SENSOR;
+				} else
+					pstate = ST_ERR;
+
+				break;
+			case 2:
+				if (pstate == ST_SENSOR ) {
+					ret = strdup(topics[n]);
+				} 
+				break;
+		}
+	}
+	mosquitto_sub_topic_tokens_free(&topics, topic_cnt);
+	return (ret);
+}
 
 mqtt_cmd_t
 mqtt_proc_msg(char *topic, char *payload)
@@ -350,23 +391,16 @@ mqtt_proc_msg(char *topic, char *payload)
 		switch (n) {
 			case 0:
 				if (topics[0] == NULL)
-					pstate = ST_LUGAR;
+					pstate = ST_ENVIRONMENT;
 				break;
 			case 1:
-				if (pstate == ST_LUGAR && !strncasecmp(topics[n], "guernika", 8)) {
-					pstate = ST_ENVIRONMENT;
-				} else {
-					pstate = ST_ERR;
-				}
-				break;
-			case 2:
 				if (pstate == ST_ENVIRONMENT && !strcasecmp(topics[n], "environment")) {
 					pstate = ST_SENSOR;
 				} else
 					pstate = ST_ERR;
 
 				break;
-			case 3:
+			case 2:
 				if (pstate == ST_SENSOR && !strcasecmp(topics[n], "light")) {
 					cmd_hint = CMD_LIGHT;
 					if (topic_cnt > (n+1)) {
@@ -436,8 +470,23 @@ my_message_callback(struct mosquitto *mosq, void *userdata, const struct mosquit
 {
 	mqtt_cmd_t  cmd;
 	float light, tempin, tempout, pressure, humidity, pir;
+	char *dataf;
+	float val;
 
 	if (msg->payloadlen){
+		if ((dataf = mqtt_poli_proc_msg(msg->topic, msg->payload)) != NULL) {
+			val = atof((char *)msg->payload);
+			if (MQTT_poli_store(sqlitedb, dataf, val) != 0) {
+				MQTT_log("Store failure\n");
+			}
+		}
+	} else {
+		MQTT_log( "Empty message on %s\n", msg->topic);
+	}
+	return;
+ 	/*  XXX * NOT REACHED * XXX */
+	if (0)
+	{
 		cmd = mqtt_proc_msg(msg->topic, msg->payload);
 		if (cmd == CMD_ERR)
 			/*MQTT_printf( "Command %s = %d\n", msg->topic, msg->payload, cmd);
@@ -555,8 +604,8 @@ my_connect_callback(struct mosquitto *mosq, void *userdata, int result)
 
 	if (!result){
 		/* Subscribe to broker information topics on successful connect. */
-		/*  /mosquitto_subscribe(mosq, NULL, "/guernika/#", 0);*/
-		/*mosquitto_subscribe(mosq, NULL, "/guernika/network/stations", 0);*/
+		/*  /mosquitto_subscribe(mosq, NULL, "/#", 0);*/
+		/*mosquitto_subscribe(mosq, NULL, "/network/stations", 0);*/
 		MQTT_log("Connected sucessfully %s as %s\n", myMQTT_conf.mqtt_host, myMQTT_conf.mqtt_user);
 		MQTT_printf("Connected sucessfully %s as %s\n", myMQTT_conf.mqtt_host, myMQTT_conf.mqtt_user);
 	} else {
@@ -635,7 +684,7 @@ MQTT_pub(struct mosquitto *mosq, const char *topic, bool perm, const char *fmt, 
 	vsnprintf(msgbuf, sizeof msgbuf, fmt, lst);
 	va_end(lst);
 	msglen = strlen(msgbuf);
-	/*mosquitto_publish(mosq, NULL, "/guernika/network/broadcast", 3, Mosquitto.mqh_msgbuf, 0, false);*/
+	/*mosquitto_publish(mosq, NULL, "/network/broadcast", 3, Mosquitto.mqh_msgbuf, 0, false);*/
 	if (mosquitto_publish(mosq, &mid, topic, msglen, msgbuf, 0, perm) == MOSQ_ERR_SUCCESS) {
 		ret = mid;
 		MQTT_stat.mqs_last_pub_mid = mid;

@@ -18,6 +18,9 @@
 
 const char *device = "hw:0";
 static int  MQTT_pub(struct mosquitto *, const char *, bool , const char *, ...);
+static char *mqtt_host, *mqtt_user, *mqtt_password, *mqtt_topic;
+static int mqtt_port = 1883;
+static unsigned short debug_mode;
 
 int	      
 main (int argc, char *argv[])
@@ -25,14 +28,47 @@ main (int argc, char *argv[])
   int i;
   int pcm_err;
   char *buffer;
+  int opt;
   struct mosquitto *m;
 
+	while ((opt = getopt(argc, argv, "h:u:p:P:vt:")) != -1) {
+		switch(opt) {
+			case 'h': /* host */
+				mqtt_host = strdup(optarg);
+				break;
+			case 't': /* topic */
+				mqtt_topic = strdup(optarg);
+				break;
+			case 'p': /* port */
+				mqtt_port = atoi(optarg);
+				break;
+			case 'P': /* password */
+				mqtt_password = strdup(optarg);
+				break;
+			case 'u': /* user */
+				mqtt_user = strdup(optarg);
+				break;
+			case 'v':
+				debug_mode++;
+				break;
+			default:
+				printf("usage: mqtt_mic [-t topic] [-u user] [-h host] [-P passowrd] [-p port]\n");
+				exit(64);
+		}
+	}
+   if (mqtt_host == NULL || mqtt_user == NULL || mqtt_password == NULL || mqtt_topic == NULL) {
+	   printf("too few arguments\n");
+	   exit(64);
+   }
 
    mosquitto_lib_init();
    m= mosquitto_new("mqtt_alsa_capture", true, NULL);
-   mosquitto_username_pw_set(m, "mqtt_alsa_capture", "RafMafyesk");
+   mosquitto_username_pw_set(m, mqtt_user, mqtt_password);
 
-   mosquitto_connect(m, "mail.obin.org", 1883, 300);
+   if (mosquitto_connect(m, mqtt_host, mqtt_port, 300) != MOSQ_ERR_SUCCESS) {
+	   fprintf(stderr, "mosquitto connect failure %s\n",strerror(errno));
+	   exit(0);
+   }
 
 
   signed short sbuf[128];
@@ -144,7 +180,9 @@ main (int argc, char *argv[])
     }
     
     printf(" \n%f\n", (float) (fsum/frames));
-    MQTT_pub(m, "/guernika/environment/alsa/mic", false, "%f", ((float) (fsum/frames)));
+    if (MQTT_pub(m, mqtt_topic, false, "%f", ((float) (fsum/frames))) < 0) {
+	    fprintf(stderr, "publish on %s failure!\n", mqtt_topic);
+    }
     sleep(1);
   }
 
@@ -172,9 +210,11 @@ MQTT_pub(struct mosquitto *mosq, const char *topic, bool perm, const char *fmt, 
 	va_end(lst);
 	msglen = strlen(msgbuf);
 	/*mosquitto_publish(mosq, NULL, "/guernika/network/broadcast", 3, Mosquitto.mqh_msgbuf, 0, false);*/
-	if (mosquitto_publish(mosq, &mid, topic, msglen, msgbuf, 0, perm) == MOSQ_ERR_SUCCESS) {
+	if ((ret = mosquitto_publish(mosq, &mid, topic, msglen, msgbuf, 0, perm)) == MOSQ_ERR_SUCCESS) {
 		ret = mid;
-	} else
+	} else {
+		fprintf(stderr, "mosquitto error %d %s\n", ret, mosquitto_strerror(ret));
 		ret = -1;
+	}
 	return (ret);
 }
