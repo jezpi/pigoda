@@ -11,25 +11,51 @@
 #include <mosquitto.h>
 #include <string.h>
 
+static char *mqtt_host, *mqtt_user, *mqtt_password, *mqtt_topic;
+static int mqtt_port = 1883;
+static unsigned short debug_mode;
+#define DEFAULT_MQTT_PIN 6
+
 static int  MQTT_pub(struct mosquitto *mosq, const char *topic, bool perm, const char *fmt, ...);
 int
 main(int argc, char **argv)
 {
-	int pinnum = 6;
+	int pinnum = DEFAULT_MQTT_PIN;
 	int val;
+	int opt;
 	struct mosquitto *m;
 
-
-	if (argc < 2 ) {
-		printf("usage: [pwm]\n");
-		printf("PIR pin defaults to %d\n", pinnum);
-		printf("\tRev. %d\n", piBoardRev());
-	} else {
-		pinnum = atoi(argv[1]);
+	while ((opt = getopt(argc, argv, "h:u:p:P:vt:")) != -1) {
+		switch(opt) {
+			case 'h': /* host */
+				mqtt_host = strdup(optarg);
+				break;
+			case 't': /* topic */
+				mqtt_topic = strdup(optarg);
+				break;
+			case 'p': /* port */
+				mqtt_port = atoi(optarg);
+				break;
+			case 'P': /* password */
+				mqtt_password = strdup(optarg);
+				break;
+			case 'u': /* user */
+				mqtt_user = strdup(optarg);
+				break;
+			case 'v':
+				debug_mode++;
+				break;
+			default:
+				printf("usage: mqttpir [-t topic] [-u user] [-h host] [-P passowrd] [-p port]\n");
+				printf("PIR pin defaults to %d\n", pinnum);
+				printf("\tRev. %d\n", piBoardRev());
+		}
 	}
 	mosquitto_lib_init();
-	m= mosquitto_new("pir_sensors", true, NULL);
-	mosquitto_connect(m, "mail.obin.org", 1883, 300);
+	m= mosquitto_new("mqtt_pir", true, NULL);
+	mosquitto_username_pw_set(m, mqtt_user, mqtt_password);
+
+	mosquitto_connect(m, mqtt_user, mqtt_port, 300);
          	
 	wiringPiSetup();
 
@@ -56,16 +82,18 @@ main(int argc, char **argv)
 				actled = false;
 			}
 		}
-		if (positive > 0) printf("\n");
-		else
-			printf("|\n");
-		MQTT_pub(m, "/guernika/environment/pir", false, "%f", (float)positive/60);
-		/*printf("rate %f\n", (float)positive/60);*/
+		if (debug_mode) {
+			if (positive > 0) printf("\n");
+			else
+				printf("|\n");
+		}
+		MQTT_pub(m, mqtt_topic, false, "%f", (float)positive/60);
 
 	}
 	mosquitto_disconnect(m);
 	return(0);
 }
+
 static int  
 MQTT_pub(struct mosquitto *mosq, const char *topic, bool perm, const char *fmt, ...)
 {
