@@ -19,13 +19,19 @@ def fill_db_vc_temp(sqlitedb, offset):
 			print "rrd failure!"
 
 
-def create_db(rrdfile, dsname, offs, step=60):
+def create_db(dsname, offs, step=60 ):
+        rrdfile=rrdpath+dsname+".rrd"
 	try:
 		os.remove(rrdfile);
 	except:
 		win.addstr(6, 0, "Failed to remove "+rrdfile);
 		win.refresh();
-		return 0;
+        finally:
+            win.addstr(6, 0, "RRD file: "+rrdfile+" has been removed");
+	    win.refresh();
+
+        win.addstr(6, 0, "Created a new RRD file: "+rrdfile+"     ");
+        win.refresh();
 	rrdtool.create(rrdfile, "--step", str(step), "--start", str(offs),
 		"DS:"+dsname+":GAUGE:120:0:24000",
                 "RRA:AVERAGE:0.5:1:864000",
@@ -64,6 +70,23 @@ def get_sqlite_offset(sqlitedb, table, ts='timestamp'):
 	offset=cur.fetchone()[0];
 	return int(offset);
 
+def plot_table(tname):
+    rrdf=rrdpath+"/"+tname+".rrd";
+    offs=get_sqlite_offset(sensorsdb, tname);
+    printoff(offs)
+
+    wstr="   Start offset:"+printoff(offs)+" "+tname;
+    win.addstr(1, 0, wstr);
+    win.refresh();
+    create_db(tname, offs, 60);
+    sq_query = 'SELECT * from '+tname+' WHERE timestamp > ? ORDER BY timestamp';
+    fill_rrd_db(sensorsdb, sq_query, rrdf, offs)
+
+
+
+#######
+# main
+# create and fill rrd database from sqlite
 
 
 if len(sys.argv) > 1 :
@@ -72,51 +95,31 @@ else:
 	print "usage filldb.py [arg]"
 	sys.exit(64)
 
-sensorsdb='/var/db/pigoda/sensors.db'
+sensorsdb='/var/db/pigoda/sensorsv2.db'
 rrdpath="/var/db/pigoda/rrd/"
 
 
 curses.initscr();
 win = curses.newwin(0, 0);
 win.insstr(1, 0, "...Press any key to continue...");
-win.insstr(2, 0, rrdpath);
+#win.insstr(2, 0, rrdpath);
 win.refresh();
 win.getkey();
 win.addstr(1, 0, "  Wait                         ");
 win.refresh();
-#off=1462656009
-#off=1463171075
-#fill_db_vc_temp('/home/jez/temperature.db', off);
-#off=1463179962
-#fill_db_pressure('/home/jez/code/MQTT/graph_channel/sensors.db', off);
-#fill_db_tempin('/home/jez/code/MQTT/graph_channel/sensors.db', 1462656009 );
-#fill_db_pir('/home/jez/code/MQTT/graph_channel/sensors.db', 1464595304 );
+
 if cmd == "pir":
-	off=get_sqlite_offset(sensorsdb, 'pir');
-	print printoff(off)+"  pir";
-        rrdf=rrdpath+"/pir.rrd"
-	fill_rrd_db(sensorsdb, 'SELECT * from pir WHERE timestamp > ? ORDER BY timestamp', rrdf+'/pir.rrd', off)
+    plot_table(cmd);
 elif cmd == "pressure":
-	off=get_sqlite_offset(sensorsdb, 'pressure');
-	print "Filling pressure starting from: "+printoff(off);
-        rrdf=rrdpath+"/pressure.rrd"
-	create_db(rrdf, "pressure", off);
-	fill_rrd_db(sensorsdb, 'SELECT * from pressure WHERE timestamp > ? ORDER BY timestamp', rrdf+'/pressure.rrd', off)
-	print printoff(off)+"  pressure";
+    plot_table(cmd);
 elif cmd == "light":
-	off=get_sqlite_offset(sensorsdb, 'light', ts='times');
-	wstr="   Start offset:"+printoff(off)+" light";
-	win.addstr(1, 0, wstr);
-	win.refresh();
-	create_db(rrdpath+"/light.rrd", "light", off);
-	fill_rrd_db(sensorsdb, "SELECT * from light WHERE times > ? ORDER BY times", rrdf+'/light.rrd', off);
+    plot_table(cmd);
 elif cmd == "tempin":
-	off=get_sqlite_offset(sensorsdb, 'temp_in', ts='timestamp');
-	wstr="   Start offset:"+printoff(off)+" temperaute inside";
-	win.addstr(1, 0, wstr);
-	win.refresh();
-	create_db(rrdpath+"/tempin.rrd", "tempin", off);
-	fill_rrd_db(sensorsdb, "SELECT * from temp_in WHERE timestamp > ? ORDER BY timestamp", '/var/db/pigoda/rrd/tempin.rrd', off);
+    plot_table(cmd);
+elif cmd == "tempout":
+    plot_table(cmd);
+elif cmd == "mic":
+    plot_table(cmd);
 else:
 	win.addstr(0, 20, "unknown command "+cmd);
 
