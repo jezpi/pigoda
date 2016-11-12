@@ -195,8 +195,8 @@ main(int argc, char **argv)
 
 	}
 	
-	MQTT_log("Subscribe to /guernika/%s/cmd/#", __HOSTNAME);
-	MQTT_sub(Mosquitto.mqh_mos, "/guernika/%s/cmd/#", __HOSTNAME);
+	MQTT_log("Subscribe to /%s/cmd/#", __HOSTNAME);
+	MQTT_sub(Mosquitto.mqh_mos, "/%s/cmd/#", __HOSTNAME);
 	
 	/*
 	MQTT_log("FAN act init");
@@ -215,11 +215,11 @@ main(int argc, char **argv)
 					break;
 			}
 			if (first_run) {
-				MQTT_pub(mosq, "/guernika/network/broadcast/mqtt_rpi", true, "on");
+				MQTT_pub(mosq, "/network/broadcast/mqtt_rpi", true, "on");
 				first_run = false;
 			}
 			if (got_SIGUSR1) {
-				MQTT_pub(mosq, "/guernika/network/broadcast/mqtt_rpi/user", false, "user_signal");
+				MQTT_pub(mosq, "/network/broadcast/mqtt_rpi/user", false, "user_signal");
 				got_SIGUSR1 = 0;
 			}
 			if (got_SIGCHLD) {
@@ -244,11 +244,11 @@ main(int argc, char **argv)
 			main_loop = false;
 			fprintf(stderr, "%s) got SIGTERM\n", __PROGNAME);
 			got_SIGTERM = 0;
-			MQTT_pub(mosq, "/guernika/network/broadcast/mqtt", true, "off");
+			MQTT_pub(mosq, "/network/broadcast/mqtt", true, "off");
 		}
 		if (proc_command) {
 			proc_command = false;
-			MQTT_pub(mosq, "/guernika/network/broadcast", false, "%lu", Mosquitto.mqh_start_time);
+			MQTT_pub(mosq, "/network/broadcast", false, "%lu", Mosquitto.mqh_start_time);
 		}
 		if (do_pool_sensors) {
 			flash_led(GREEN_LED, HIGH);
@@ -390,23 +390,16 @@ mqtt_proc_msg(char *topic, char *payload)
 		switch (n) {
 			case 0:
 				if (topics[0] == NULL)
-					pstate = ST_LUGAR;
+					pstate = ST_HOST;
 				break;
 			case 1:
-				if (pstate == ST_LUGAR && !strncasecmp(topics[n], "guernika", 8)) {
-					pstate = ST_HOST;
-				} else {
-					pstate = ST_ERR;
-				}
-				break;
-			case 2:
 				if (pstate == ST_HOST && !strcasecmp(topics[n], __HOSTNAME)) {
 					pstate = ST_CMD;
 				} else
 					pstate = ST_ERR;
 
 				break;
-			case 3:
+			case 2:
 				if (pstate == ST_CMD && !strncasecmp(topics[n], "cmd", 3)) {
 					if (topic_cnt > (n+1)) {
 						pstate = ST_CMDARGS;
@@ -415,7 +408,7 @@ mqtt_proc_msg(char *topic, char *payload)
 				} else
 					pstate = ST_ERR;
 				break;
-			case 4:
+			case 3:
 				if (pstate == ST_CMDARGS && !strncasecmp(topics[n], "FAN", 3)) {
 					curcmd = CMD_FAN;
 					pstate = ST_DONE;
@@ -505,9 +498,9 @@ my_connect_callback(struct mosquitto *mosq, void *userdata, int retcode)
 
 	if(!retcode){
 		/* Subscribe to broker information topics on successful connect. */
-		MQTT_sub(mosq, "/guernika/IoT#");
-		/*  /mosquitto_subscribe(mosq, NULL, "/guernika/#", 0);*/
-		/*mosquitto_subscribe(mosq, NULL, "/guernika/network/stations", 0);*/
+		MQTT_sub(mosq, "/IoT#");
+		/*  /mosquitto_subscribe(mosq, NULL, "/#", 0);*/
+		/*mosquitto_subscribe(mosq, NULL, "/network/stations", 0);*/
 		MQTT_printf("Connected sucessfully %s\n", myMQTT_conf.mqtt_host);
 		mqtt_connected = true;
 	} else { 
@@ -604,7 +597,7 @@ MQTT_pub(struct mosquitto *mosq, const char *topic, bool perm, const char *fmt, 
 	vsnprintf(msgbuf, sizeof msgbuf, fmt, lst);
 	va_end(lst);
 	msglen = strlen(msgbuf);
-	/*mosquitto_publish(mosq, NULL, "/guernika/network/broadcast", 3, Mosquitto.mqh_msgbuf, 0, false);*/
+	/*mosquitto_publish(mosq, NULL, "/network/broadcast", 3, Mosquitto.mqh_msgbuf, 0, false);*/
 	if ((pubret = mosquitto_publish(mosq, &mid, topic, msglen, msgbuf, 0, perm)) == MOSQ_ERR_SUCCESS) {
 		ret = mid;
 		MQTT_stat.mqs_last_pub_mid = mid;
@@ -723,13 +716,13 @@ pool_sensors(struct mosquitto *mosq)
 
 
 	light = pcf8591p_ain(0);
-	if ((ret = MQTT_pub(mosq, "/guernika/environment/light", true, "%d", light)) == -1) {
+	if ((ret = MQTT_pub(mosq, "/environment/light", true, "%d", light)) == -1) {
 		MQTT_log("Failed to publish light %s\n", mosquitto_strerror(ret));
 		return (-1);
 	}
 
 	if ((temp_in = get_temperature("28-0000055a8be7")) != -1) {
-		if ((ret = MQTT_pub(mosq, "/guernika/environment/tempin", true, "%f", temp_in)) == -1) {
+		if ((ret = MQTT_pub(mosq, "/environment/tempin", true, "%f", temp_in)) == -1) {
 			MQTT_log("Failed to publish tempin %s\n", mosquitto_strerror(ret));
 			return (-1);
 		}
@@ -738,7 +731,7 @@ pool_sensors(struct mosquitto *mosq)
 		ret = -1;
 	}
 	if ((temp_out = get_temperature("28-000005d3355e")) != -1) {
-		if ((ret = MQTT_pub(mosq, "/guernika/environment/tempout", true, "%f", temp_out)) == -1) {
+		if ((ret = MQTT_pub(mosq, "/environment/tempout", true, "%f", temp_out)) == -1) {
 			MQTT_log("Failed to publish tempout %s\n", mosquitto_strerror(ret));
 			
 		}
@@ -748,7 +741,7 @@ pool_sensors(struct mosquitto *mosq)
 	}
 
 	pressure=get_pressure();
-	if ((MQTT_pub(mosq, "/guernika/environment/pressure", true, "%0.2f", pressure)) == -1) {
+	if ((MQTT_pub(mosq, "/environment/pressure", true, "%0.2f", pressure)) == -1) {
 		MQTT_log("Failed to publish pressure\n");
 		ret = -1;
 	}
