@@ -81,7 +81,6 @@ struct mq_ch_screen {
 #define STAT_SQLITE_LIGHT	3
 #define STAT_SQLITE_HUMIDITY	4
 #define STAT_SQLITE_PIR		5
-
 } screen_data;
 
 typedef struct mqtt_hnd {
@@ -143,6 +142,7 @@ static bool mqtt_conn_dead = false;
 
 
 mqtt_cmd_t mqtt_proc_msg(char *, char *);
+char * mqtt_poli_proc_msg(char *, char *);
 
 static int set_logging(mqtt_global_cfg_t *myconf);
 static void sig_hnd(int);
@@ -183,7 +183,7 @@ main(int argc, char **argv)
 		exit(3);
 
 	}
-	sqlitedb = MQTT_initdb("/var/db/pigoda/sensors.db");
+	sqlitedb = MQTT_initdb((myMQTT_conf.sqlite3_db == NULL?"/var/db/pigoda/sensors.db":myMQTT_conf.sqlite3_db));
 
 	init_screen(&screen_data);
 #ifdef THINGSPEAK
@@ -324,6 +324,48 @@ my_subscribe_callback(struct mosquitto *mosq, void *userdata, int mid, int qos_c
 	MQTT_log( "\n");
 }
 
+char * 
+mqtt_poli_proc_msg(char *topic, char *payload)
+{
+	char	*p;
+	char	*pbuf = strdup(payload);
+	char	*hnam_buf;
+	char	**topics;
+	int	topic_cnt, n;
+	char 	*ret = NULL;
+	enum {ST_BEGIN, ST_LUGAR, ST_ENVIRONMENT, ST_SENSOR, ST_DATA, ST_DONE, ST_ERR} pstate;
+
+	if ((p = strchr(pbuf, '\n')) != NULL)
+		*p = '\0';
+
+	if (mosquitto_sub_topic_tokenise(topic, &topics, &topic_cnt) != MOSQ_ERR_SUCCESS) {
+		return (NULL);
+	}
+	pstate = ST_BEGIN;
+	for (n=0; topic_cnt >= n && pstate != ST_ERR; n++) {
+		switch(n) {
+			case 0:
+				if (topics[0] == NULL)
+					pstate = ST_ENVIRONMENT;
+				break;
+			case 1:
+
+				if (pstate == ST_ENVIRONMENT && !strcasecmp(topics[n], "environment")) {
+					pstate = ST_SENSOR;
+				} else
+					pstate = ST_ERR;
+
+				break;
+			case 2:
+				if (pstate == ST_SENSOR ) {
+					ret = strdup(topics[n]);
+				} 
+				break;
+		}
+	}
+	mosquitto_sub_topic_tokens_free(&topics, topic_cnt);
+	return (ret);
+}
 
 mqtt_cmd_t
 mqtt_proc_msg(char *topic, char *payload)
@@ -428,8 +470,23 @@ my_message_callback(struct mosquitto *mosq, void *userdata, const struct mosquit
 {
 	mqtt_cmd_t  cmd;
 	float light, tempin, tempout, pressure, humidity, pir;
+	char *dataf;
+	float val;
 
 	if (msg->payloadlen){
+		if ((dataf = mqtt_poli_proc_msg(msg->topic, msg->payload)) != NULL) {
+			val = atof((char *)msg->payload);
+			if (MQTT_poli_store(sqlitedb, dataf, val) != 0) {
+				MQTT_log("Store failure\n");
+			}
+		}
+	} else {
+		MQTT_log( "Empty message on %s\n", msg->topic);
+	}
+	return;
+ 	/*  XXX * NOT REACHED * XXX */
+	if (0)
+	{
 		cmd = mqtt_proc_msg(msg->topic, msg->payload);
 		if (cmd == CMD_ERR)
 			/*MQTT_printf( "Command %s = %d\n", msg->topic, msg->payload, cmd);
