@@ -1,6 +1,7 @@
 #include <stdio.h>
 
 #include <yaml.h>
+
 #include "mqtt.h"
 #define DEBUG
 #ifdef DEBUG
