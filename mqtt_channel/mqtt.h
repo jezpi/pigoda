@@ -7,6 +7,8 @@
 typedef struct mqtt_global_config_t {
 	const char *pidfile;
 	const char *logfile;
+	const char *channel_prefix;
+	const char *sqlite3_db;
 	unsigned int debug_level;
 	const char *mqtt_host;
 	const char *mqtt_user;

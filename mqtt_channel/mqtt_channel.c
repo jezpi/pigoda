@@ -189,14 +189,14 @@ main(int argc, char **argv)
 #ifdef THINGSPEAK
 	TSMQTT = MQTT_to_ts_init("YLW6C8UWBXKWMEXZ", 10709);
 #endif
-	MQTT_sub(Mosquitto.mqh_mos, "/guernika/environment/#");
-	/*MQTT_sub(mosq, "/guernika/IoT#");*/
+	MQTT_sub(Mosquitto.mqh_mos, "/environment/#" );
+	/*MQTT_sub(mosq, "/IoT#");*/
 
 	while (main_loop) {
 		/* -1 = 1000ms ,  0 = instant return */
 		while((mqloopret = MQTT_loop(mosq, 0)) != MOSQ_ERR_SUCCESS) {
 			if (got_SIGUSR1) {
-				MQTT_pub(mosq, "/guernika/network/broadcast/mqtt_channel/user", false, "user_signal");
+				MQTT_pub(mosq, "/network/broadcast/mqtt_channel/user", false, "user_signal");
 				got_SIGUSR1 = 0;
 			}
 			if (!main_loop) {
@@ -205,7 +205,7 @@ main(int argc, char **argv)
 		}
 
 			if (first_run) {
-				MQTT_pub(mosq, "/guernika/network/broadcast/mqtt_channel", true, "on");
+				MQTT_pub(mosq, "/network/broadcast/mqtt_channel", true, "on");
 				first_run = false;
 			}
 		if (mqtt_conn_dead) {
@@ -221,11 +221,11 @@ main(int argc, char **argv)
 			main_loop = false;
 			/*fprintf(stderr, "%s) got SIGTERM\n", __PROGNAME);*/
 			got_SIGTERM = 0;
-			MQTT_pub(mosq, "/guernika/network/broadcast/mqtt_channel", true, "off");
+			MQTT_pub(mosq, "/network/broadcast/mqtt_channel", true, "off");
 		}
 		if (proc_command) {
 			proc_command = false;
-			MQTT_pub(mosq, "/guernika/network/mqtt_channel/broadcast", false, "%lu", Mosquitto.mqh_start_time);
+			MQTT_pub(mosq, "/network/mqtt_channel/broadcast", false, "%lu", Mosquitto.mqh_start_time);
 		}
 
 		update_screen_stats(&screen_data);
@@ -235,7 +235,6 @@ main(int argc, char **argv)
 		}
 	  	usleep(155000);
 	}
-
 	MQTT_detachdb(sqlitedb);
 	MQTT_printf("End of work");
 	MQTT_finish(&Mosquitto);
@@ -350,23 +349,16 @@ mqtt_proc_msg(char *topic, char *payload)
 		switch (n) {
 			case 0:
 				if (topics[0] == NULL)
-					pstate = ST_LUGAR;
+					pstate = ST_ENVIRONMENT;
 				break;
 			case 1:
-				if (pstate == ST_LUGAR && !strncasecmp(topics[n], "guernika", 8)) {
-					pstate = ST_ENVIRONMENT;
-				} else {
-					pstate = ST_ERR;
-				}
-				break;
-			case 2:
 				if (pstate == ST_ENVIRONMENT && !strcasecmp(topics[n], "environment")) {
 					pstate = ST_SENSOR;
 				} else
 					pstate = ST_ERR;
 
 				break;
-			case 3:
+			case 2:
 				if (pstate == ST_SENSOR && !strcasecmp(topics[n], "light")) {
 					cmd_hint = CMD_LIGHT;
 					if (topic_cnt > (n+1)) {
@@ -555,8 +547,8 @@ my_connect_callback(struct mosquitto *mosq, void *userdata, int result)
 
 	if (!result){
 		/* Subscribe to broker information topics on successful connect. */
-		/*  /mosquitto_subscribe(mosq, NULL, "/guernika/#", 0);*/
-		/*mosquitto_subscribe(mosq, NULL, "/guernika/network/stations", 0);*/
+		/*  /mosquitto_subscribe(mosq, NULL, "/#", 0);*/
+		/*mosquitto_subscribe(mosq, NULL, "/network/stations", 0);*/
 		MQTT_log("Connected sucessfully %s as %s\n", myMQTT_conf.mqtt_host, myMQTT_conf.mqtt_user);
 		MQTT_printf("Connected sucessfully %s as %s\n", myMQTT_conf.mqtt_host, myMQTT_conf.mqtt_user);
 	} else {
@@ -635,7 +627,7 @@ MQTT_pub(struct mosquitto *mosq, const char *topic, bool perm, const char *fmt, 
 	vsnprintf(msgbuf, sizeof msgbuf, fmt, lst);
 	va_end(lst);
 	msglen = strlen(msgbuf);
-	/*mosquitto_publish(mosq, NULL, "/guernika/network/broadcast", 3, Mosquitto.mqh_msgbuf, 0, false);*/
+	/*mosquitto_publish(mosq, NULL, "/network/broadcast", 3, Mosquitto.mqh_msgbuf, 0, false);*/
 	if (mosquitto_publish(mosq, &mid, topic, msglen, msgbuf, 0, perm) == MOSQ_ERR_SUCCESS) {
 		ret = mid;
 		MQTT_stat.mqs_last_pub_mid = mid;
