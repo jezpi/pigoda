@@ -19,6 +19,7 @@
 #include <yaml.h>
 #include <sqlite3.h>
 
+
 #include <ncurses.h>
 
 #include "mqtt_db.h"
@@ -62,10 +63,20 @@ struct MQTT_statistics {
 
 } MQTT_stat;
 
+typedef struct scr_stat {
+	char 	*ss_name;
+	float 	 ss_value;
+	unsigned long ss_err_sqlite;
+	unsigned long ss_store_sqlite;
+	struct scr_stat *ss_next;
+} scr_stat_t;
+
 
 struct mq_ch_screen {
 	WINDOW *win;
 	WINDOW *win_stat;
+	scr_stat_t *screen_stats_head;
+	scr_stat_t *screen_stats_tail;
 	double	pressure;
 	double tempin;
 	double tempout;
@@ -82,6 +93,69 @@ struct mq_ch_screen {
 #define STAT_SQLITE_HUMIDITY	4
 #define STAT_SQLITE_PIR		5
 } screen_data;
+
+
+
+scr_stat_t *
+scr_stat_new(struct mq_ch_screen *sd, const char *name, float value)
+{
+	scr_stat_t 	*sp;
+
+	sp = calloc(1, sizeof(*sp)); /* TODO check if NULL */
+	sp->ss_name = strdup(name);
+	sp->ss_value = value;	
+
+	if (sd->screen_stats_head == NULL) {
+		sd->screen_stats_head = sd->screen_stats_tail = sp;
+	} else {
+		sd->screen_stats_tail->ss_next = sp;
+		sd->screen_stats_tail = sp;
+	}
+	return (sp);
+}
+
+
+scr_stat_t *
+scr_stat_find(struct mq_ch_screen *sd, const char *name)
+{
+	scr_stat_t *sp; 
+	scr_stat_t *ret = sp = NULL;
+
+	if ((sp = sd->screen_stats_head) == NULL) {
+		return (NULL);
+	}
+	do {
+		if (!strcasecmp(name, sp->ss_name)) {
+			ret = sp;
+			break;
+		}
+		sp = sp->ss_next;
+	} while (sp != sd->screen_stats_head && sp != NULL);
+	return (ret);
+
+}
+
+scr_stat_t *
+scr_stat_update(struct mq_ch_screen *sd, const char *name, float value) 
+{
+	scr_stat_t *sp = NULL;
+
+	if ((sp = sd->screen_stats_head) == NULL) {
+		return (NULL);
+	}
+	do {
+		if (!strcasecmp(name, sp->ss_name)) {
+			sp->ss_value = value;
+			return (sp);
+		}
+		sp = sp->ss_next;
+	} while (sp != sd->screen_stats_head && sp != NULL);
+	return (sp);
+}
+
+
+
+
 
 typedef struct mqtt_hnd {
 	struct mosquitto	*mqh_mos;
@@ -127,14 +201,19 @@ static int MQTT_sub(struct  mosquitto *m, const char *topic_fmt, ...);
 int MQTT_printf(const char *, ...);
 int MQTT_log(const char *, ...);
 static void MQTT_finish(mqtt_hnd_t *);
+#define NCURSES
+#ifdef NCURSES
 static WINDOW *init_screen();
+void destroy_screen(struct mq_ch_screen *) ;
+static int update_screen_stats(struct mq_ch_screen *) ;
+
+#endif /* NCURSES */
 static struct mosquitto * MQTT_reconnect(struct mosquitto *m, int *ret);
 #ifdef THINGSPEAK
 static int MQTT_to_ts(struct ts_MQTT *, MQTT_data_type_t type, float value);
 static struct ts_MQTT * MQTT_to_ts_init(const char *apikey, int channel);
 #endif /* ! THINGSPEAK */
 
-void destroy_screen(struct mq_ch_screen *) ;
 static bool mqtt_conn_dead = false;
 
 
@@ -185,7 +264,9 @@ main(int argc, char **argv)
 	}
 	sqlitedb = MQTT_initdb((myMQTT_conf.sqlite3_db == NULL?"/var/db/pigoda/sensors.db":myMQTT_conf.sqlite3_db));
 
+#ifdef NCURSES
 	init_screen(&screen_data);
+#endif /* ! NCURSES */
 #ifdef THINGSPEAK
 	TSMQTT = MQTT_to_ts_init("YLW6C8UWBXKWMEXZ", 10709);
 #endif
@@ -227,12 +308,14 @@ main(int argc, char **argv)
 			proc_command = false;
 			MQTT_pub(mosq, "/network/mqtt_channel/broadcast", false, "%lu", Mosquitto.mqh_start_time);
 		}
-
+#ifdef NCURSES
 		update_screen_stats(&screen_data);
 
 		if (screen_data.win != NULL) {
 			wrefresh(screen_data.win );
 		}
+
+#endif
 	  	usleep(155000);
 	}
 	MQTT_detachdb(sqlitedb);
@@ -309,7 +392,9 @@ MQTT_finish(mqtt_hnd_t *m)
 	mosquitto_disconnect(m->mqh_mos);
 	mosquitto_destroy(m->mqh_mos);
 	mosquitto_lib_cleanup();
+#ifdef NCURSES
 	destroy_screen(&screen_data);
+#endif /* ! NCURSES */
 	return;
 }
 
@@ -469,6 +554,7 @@ static void
 my_message_callback(struct mosquitto *mosq, void *userdata, const struct mosquitto_message *msg)
 {
 	mqtt_cmd_t  cmd;
+	scr_stat_t 	*sp;
 	float light, tempin, tempout, pressure, humidity, pir;
 	char *dataf;
 	float val;
@@ -476,8 +562,17 @@ my_message_callback(struct mosquitto *mosq, void *userdata, const struct mosquit
 	if (msg->payloadlen){
 		if ((dataf = mqtt_poli_proc_msg(msg->topic, msg->payload)) != NULL) {
 			val = atof((char *)msg->payload);
+			if ((sp = scr_stat_find(&screen_data, dataf)) == NULL) {
+				sp = scr_stat_new(&screen_data, dataf, val);
+			} else {
+				sp->ss_value = val;
+			}
+
 			if (MQTT_poli_store(sqlitedb, dataf, val) != 0) {
 				MQTT_log("Store failure\n");
+				sp->ss_err_sqlite++;
+			} else {
+				sp->ss_store_sqlite++;
 			}
 		}
 	} else {
@@ -817,7 +912,7 @@ mqtt_rpi_init(const char *progname, char *conf)
 	return (ret);
 }
 
-
+#ifdef NCURSES
 static WINDOW *
 init_screen(struct mq_ch_screen *scr) {
 	WINDOW *local_win;
@@ -835,16 +930,32 @@ init_screen(struct mq_ch_screen *scr) {
 	return (local_win);
 }
 
-int
-update_screen_stats(struct mq_ch_screen *scr) {
+static int
+update_screen_stats(struct mq_ch_screen *scr) 
+{
+	scr_stat_t 	*sp;
+	int 			linecnt = 1;
+
 	mvwprintw(scr->win_stat, 0, 0, "------------- Live Stats ------>\n");
-	mvwprintw(scr->win_stat, 1, 1, "              Light: %11d     %lu/%lu", scr->light,scr->store_sqlite[STAT_SQLITE_LIGHT], scr->err_sqlite[STAT_SQLITE_LIGHT]);
-	mvwprintw(scr->win_stat, 2, 1, " Temperature inside: %3.8f     %lu/%lu", scr->tempin, scr->store_sqlite[STAT_SQLITE_TEMPIN], scr->err_sqlite[STAT_SQLITE_TEMPIN]);
-	mvwprintw(scr->win_stat, 3, 1, "Temperature outside: %3.8f     %lu/%lu", scr->tempout, scr->store_sqlite[STAT_SQLITE_TEMPOUT] ,scr->err_sqlite[STAT_SQLITE_TEMPOUT]);
-	mvwprintw(scr->win_stat, 4, 1, "           Pressure: %f     %lu/%lu", scr->pressure, scr->store_sqlite[STAT_SQLITE_PRESSURE], scr->err_sqlite[STAT_SQLITE_PRESSURE]);
-	mvwprintw(scr->win_stat, 5, 1, "           Humidity: %f     %lu/%lu", scr->humidity, scr->store_sqlite[STAT_SQLITE_HUMIDITY], scr->err_sqlite[STAT_SQLITE_HUMIDITY]);
-	mvwprintw(scr->win_stat, 6, 1, "                PIR: %f     %lu/%lu", scr->pir, scr->store_sqlite[STAT_SQLITE_PIR], scr->err_sqlite[STAT_SQLITE_PIR]);
+
+	if ((sp = scr->screen_stats_head) == NULL) {
+		mvwprintw(scr->win_stat, 1, 1, "              No Stats           \n");
+		return (-1);
+	}
+
+	mvwprintw(scr->win_stat, linecnt++, 1, "              %25s: %11s     fail/ok", "sensor name", "value");
+	do {
+		mvwprintw(scr->win_stat, linecnt, 1, "              %25s: %11f     %4lu/%lu", 
+								sp->ss_name, 
+								sp->ss_value, 
+								sp->ss_err_sqlite,
+								sp->ss_store_sqlite);
+		/* some ordering stuff */
+		linecnt++;
+		sp = sp->ss_next;
+	} while (sp != scr->screen_stats_head && sp != NULL);
 	wrefresh(scr->win_stat);
+	return (linecnt);
 }
 
 void
@@ -853,6 +964,7 @@ destroy_screen(struct mq_ch_screen *scr) {
 	delwin(scr->win);
 	endwin();
 }
+#endif /* ! NCURSES */
 
 
 static int
