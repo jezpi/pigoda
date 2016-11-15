@@ -21,7 +21,7 @@ static int  MQTT_pub(struct mosquitto *, const char *, bool , const char *, ...)
 static char *mqtt_host, *mqtt_user, *mqtt_password, *mqtt_topic;
 static int mqtt_port = 1883;
 static unsigned short debug_mode;
-
+#define dfprintf if (debug_mode) fprintf
 int	      
 main (int argc, char *argv[])
 {
@@ -66,7 +66,7 @@ main (int argc, char *argv[])
    mosquitto_username_pw_set(m, mqtt_user, mqtt_password);
 
    if (mosquitto_connect(m, mqtt_host, mqtt_port, 300) != MOSQ_ERR_SUCCESS) {
-	   fprintf(stderr, "mosquitto connect failure %s\n",strerror(errno));
+	   dfprintf(stderr, "mosquitto connect failure %s\n",strerror(errno));
 	   exit(0);
    }
 
@@ -79,107 +79,104 @@ main (int argc, char *argv[])
   snd_pcm_format_t format = SND_PCM_FORMAT_S16_LE;
 
   if ((pcm_err = snd_pcm_open (&capture_handle, device, SND_PCM_STREAM_CAPTURE, 0)) < 0) {
-    fprintf (stderr, "cannot open audio device %s (%s)\n", 
+    dfprintf (stderr, "cannot open audio device %s (%s)\n", 
              device,
              snd_strerror (pcm_err));
     exit (1);
   }
 
-  fprintf(stdout, "audio interface opened\n");
+  dfprintf(stdout, "audio interface opened\n");
 		   
   if ((pcm_err = snd_pcm_hw_params_malloc (&hw_params)) < 0) {
-    fprintf (stderr, "cannot allocate hardware parameter structure (%s)\n",
+    dfprintf (stderr, "cannot allocate hardware parameter structure (%s)\n",
              snd_strerror (pcm_err));
     exit (1);
   }
 
-  fprintf(stdout, "hw_params allocated\n");
+  dfprintf(stdout, "hw_params allocated\n");
 				 
   if ((pcm_err = snd_pcm_hw_params_any (capture_handle, hw_params)) < 0) {
-    fprintf (stderr, "cannot initialize hardware parameter structure (%s)\n",
+    dfprintf (stderr, "cannot initialize hardware parameter structure (%s)\n",
              snd_strerror (pcm_err));
     exit (1);
   }
 
-  fprintf(stdout, "hw_params initialized\n");
+  dfprintf(stdout, "hw_params initialized\n");
 	
   if ((pcm_err = snd_pcm_hw_params_set_access (capture_handle, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED)) < 0) {
-    fprintf (stderr, "cannot set access type (%s)\n",
+    dfprintf (stderr, "cannot set access type (%s)\n",
              snd_strerror (pcm_err));
     exit (1);
   }
 
-  fprintf(stdout, "hw_params access setted\n");
+  dfprintf(stdout, "hw_params access setted\n");
 	
   if ((pcm_err = snd_pcm_hw_params_set_format (capture_handle, hw_params, format)) < 0) {
-    fprintf (stderr, "cannot set sample format (%s)\n", snd_strerror (pcm_err));
+    dfprintf (stderr, "cannot set sample format (%s)\n", snd_strerror (pcm_err));
     exit (1);
   }
 
-  fprintf(stdout, "hw_params format setted\n");
+  dfprintf(stdout, "hw_params format setted\n");
 	
   int dir;
   if ((pcm_err = snd_pcm_hw_params_set_rate_near (capture_handle, hw_params, &rate, &dir)) < 0) {
-    fprintf (stderr, "cannot set sample rate (%s)\n", snd_strerror (pcm_err));
+    dfprintf (stderr, "cannot set sample rate (%s)\n", snd_strerror (pcm_err));
     exit (1);
   }
 	
-  fprintf(stdout, "hw_params rate %d setted\n", rate);
+  dfprintf(stdout, "hw_params rate %d setted\n", rate);
 
   frames=32;
   if ((pcm_err = snd_pcm_hw_params_set_period_size_near(capture_handle, hw_params, &frames, &dir)) < 0) {
-	  fprintf(stderr, "cannot set period size %d\n", frames);
+	  dfprintf(stderr, "cannot set period size %d\n", frames);
 	  exit(3);
   }
 
   if ((pcm_err = snd_pcm_hw_params_set_channels (capture_handle, hw_params, 2)) < 0) {
-    fprintf (stderr, "cannot set channel count (%s)\n", snd_strerror (pcm_err));
+    dfprintf (stderr, "cannot set channel count (%s)\n", snd_strerror (pcm_err));
     exit (1);
   }
 
-  fprintf(stdout, "hw_params channels setted\n");
+  dfprintf(stdout, "hw_params channels setted\n");
   if ((pcm_err = snd_pcm_hw_params (capture_handle, hw_params)) < 0) {
-    fprintf (stderr, "cannot set parameters (%s)\n", snd_strerror (pcm_err));
+    dfprintf (stderr, "cannot set parameters (%s)\n", snd_strerror (pcm_err));
     exit (1);
   }
 
-  fprintf(stdout, "hw_params setted\n");
+  dfprintf(stdout, "hw_params setted\n");
   snd_pcm_hw_params_free (hw_params);
-  fprintf(stdout, "hw_params freed\n");
+  dfprintf(stdout, "hw_params freed\n");
   if ((pcm_err = snd_pcm_prepare (capture_handle)) < 0) {
-    fprintf (stderr, "cannot prepare audio interface for use (%s)\n", snd_strerror (pcm_err));
+    dfprintf (stderr, "cannot prepare audio interface for use (%s)\n", snd_strerror (pcm_err));
     exit (1);
   }
 
-  fprintf(stdout, "audio interface prepared\n");
+  dfprintf(stdout, "audio interface prepared\n");
 
   buffer = malloc(frames * snd_pcm_format_width(format) * 2);
 
-  fprintf(stdout, "buffer allocated\n");
+  dfprintf(stdout, "buffer allocated\n");
 
   int n, fsum, absval;
-  for (i = 0; i < 100; ++i) {
+  /*for (i = 0; i < 100; ++i) {*/
+  for (;;) {
     if ((pcm_err = snd_pcm_readi (capture_handle, sbuf , frames)) != frames) {
-      fprintf (stderr, "read from audio interface failed (%d) %s\n",
+      dfprintf (stderr, "read from audio interface failed (%d) %s\n",
                pcm_err, snd_strerror (pcm_err));
       if (errno == EPIPE) {
-	      printf("overun\n");
 	      errno = 0;
 	      snd_pcm_prepare(capture_handle);
       } else {
       	exit (1);
       }
     }
-    printf("------\n");
     fsum = 0;
     
     for (n=0; n < frames;++n) {
 	    absval = abs((signed short) sbuf[n]);
-	    //printf(" %d ", absval);
 	    fsum+=absval;
     }
-    
-    printf(" \n%f\n", (float) (fsum/frames));
+    printf("%f\n", (float) (fsum/(float)frames));
     if (MQTT_pub(m, mqtt_topic, false, "%f", ((float) (fsum/frames))) < 0) {
 	    fprintf(stderr, "publish on %s failure!\n", mqtt_topic);
     }
@@ -188,10 +185,10 @@ main (int argc, char *argv[])
 
   /*free(buffer);*/
 
-  fprintf(stdout, "buffer freed\n");
+  dfprintf(stdout, "buffer freed\n");
 	
   snd_pcm_close (capture_handle);
-  fprintf(stdout, "audio interface closed\n");
+  dfprintf(stdout, "audio interface closed\n");
 
   exit (0);
 }

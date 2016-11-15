@@ -290,6 +290,32 @@ GPRINT:pressure:AVERAGE:"Avg\: %5.2lf\n"
 }
 
 
+graph_mic() {
+echo "=> Creating png graph - mic "
+rrdtool graph ${RRD_GRAPH_PATH}/mic.png \
+-w 785 -h 120 -a PNG \
+--slope-mode \
+--start now-1h --end now \
+--font='DEFAULT:7:' \
+--title="Microphone" \
+--watermark="Date `date`" \
+--lower-limit 0 \
+--upper-limit 5000 \
+--alt-y-grid \
+--rigid \
+DEF:mic=${RRD_DB_PATH}/mic.rrd:mic:AVERAGE \
+VDEF:micmax=mic,MAXIMUM \
+VDEF:micmin=mic,MINIMUM \
+AREA:mic#008008:"mic\n" \
+LINE1:micmax#FF0000:"mic max \n":dashes \
+LINE1:micmin#006680:"mic min \n":dashes \
+GPRINT:mic:MAX:"Max\: %5.2lf\n" \
+GPRINT:mic:MIN:"Min\: %5.2lf\n" \
+GPRINT:mic:LAST:"Last\: %5.2lf\n"  \
+GPRINT:mic:AVERAGE:"Avg\: %5.2lf\n" 
+
+}
+
 
 
 update_graphs () {
@@ -318,6 +344,9 @@ do
 		pir)
 			graph_pir;
 			;;
+		mic)
+			graph_mic;
+			;;
 		light)
 			graph_light;
 			;;
@@ -332,6 +361,10 @@ do
 			update_graphs light;
 			update_graphs vc_temp;
 			update_graphs pir;
+			update_graphs mic;
+			update_graphs pir;
+			graph_pir;
+			graph_mic;
 			graph_tempin;
 			graph_tempout;
 			graph_pressure;
