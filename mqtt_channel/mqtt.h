@@ -15,6 +15,7 @@ typedef struct mqtt_global_config_t {
 	const char *mqtt_password;
 	unsigned short mqtt_port;
 	char *mqtt_channels[100];
+	char *identity;
 } mqtt_global_cfg_t;
 
 #define DEFAULT_CONFIG_FILE	"/etc/mqtt_channel.yaml"
