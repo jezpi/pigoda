@@ -26,6 +26,7 @@
 #include <mcp23017.h>
 #include <pcf8591.h>
 #include <errno.h>
+#include <string.h>
 
 #include "mqtt.h"
 #include "mqtt_sensors.h"
@@ -95,7 +96,7 @@ getraw(const char *devpath)
 	}
 
 	while ((chp = fgets(rbuf, sizeof rbuf, f)) != NULL) {
-		for ( chp = strtok(rbuf, " \t\n", &saveptr) ; chp != NULL; chp = strtok(saveptr, " \t\n", &saveptr))
+		for ( chp = strtok_r(rbuf, " \t\n", &saveptr) ; chp != NULL; chp = strtok_r(saveptr, " \t\n", &saveptr))
 		{
 			if (!strncmp(chp, "t=", 2)) {
 				tempstr = strdup((chp+2));
