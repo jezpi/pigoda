@@ -685,6 +685,7 @@ fork_mqtt_pir(mqtt_hnd_t *mqh)
 {
 	pid_t 	chpid;
 	int     wstatus;
+
 #define MQTT_PIR_PATH     "/home/jez/repos/pigoda/mqtt_rpi/mqttpir/mqttpir"
 	switch((chpid = fork())) {
 		case 0: /* XXX hardcoded path */

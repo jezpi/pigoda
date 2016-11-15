@@ -62,6 +62,7 @@ main(int argc, char **argv)
 	pinMode(pinnum, INPUT);
 	pinMode(0, OUTPUT);
 	digitalWrite(pinnum, HIGH);
+
 	int tick;
 	int positive;
 	bool actled = false;
@@ -107,7 +108,7 @@ MQTT_pub(struct mosquitto *mosq, const char *topic, bool perm, const char *fmt, 
 	vsnprintf(msgbuf, sizeof msgbuf, fmt, lst);
 	va_end(lst);
 	msglen = strlen(msgbuf);
-	/*mosquitto_publish(mosq, NULL, "/guernika/network/broadcast", 3, Mosquitto.mqh_msgbuf, 0, false);*/
+	/*mosquitto_publish(mosq, NULL, "/network/broadcast", 3, Mosquitto.mqh_msgbuf, 0, false);*/
 	if (mosquitto_publish(mosq, &mid, topic, msglen, msgbuf, 0, perm) == MOSQ_ERR_SUCCESS) {
 		ret = mid;
 	} else

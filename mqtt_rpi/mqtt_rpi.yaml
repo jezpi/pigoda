@@ -6,11 +6,17 @@ pidfile: "/var/run/mqtt_rpi.pid"
 logfile: "/var/log/mqtt_rpi.log"
 debug: 4
 daemon: false
-mqtt_host: "172.17.17.4"
+#mqtt_host: "m21.cloudmqtt.com"
+#mqtt_port: 18785
+#mqtt_user: "qsfeiiyd"
+#mqtt_password: "5bdyhJM8ovT7"
+
+#mqtt_host: "172.17.17.1"
+mqtt_host: "mail.obin.org"
 mqtt_port: 1883
-mqtt_user: "jez"
-mqtt_password: 'dupa.8'
-mqtt_keepalive: 60
+mqtt_user: "mqtt_rpi"
+mqtt_password: "Boashgec"
+mqtt_keepalive: 120
 # configuration of channels
 channels:
         - name: "/guernika/network/broadcast"
