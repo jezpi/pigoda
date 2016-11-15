@@ -1,3 +1,5 @@
+#!/usr/bin/env /usr/bin/python2
+
 import rrdtool,time,sys,datetime,sqlite3;
 import os
 import curses
@@ -119,6 +121,8 @@ elif cmd == "tempin":
 elif cmd == "tempout":
     plot_table(cmd);
 elif cmd == "mic":
+    plot_table(cmd);
+elif cmd == "tempin_guerni":
     plot_table(cmd);
 else:
 	win.addstr(0, 20, "unknown command "+cmd);
