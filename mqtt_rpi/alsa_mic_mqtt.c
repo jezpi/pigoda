@@ -16,11 +16,12 @@
 #include <alsa/asoundlib.h>
 #include <mosquitto.h>
 
-const char *device = "hw:0";
+const char *audio_device = "hw:0";
 static int  MQTT_pub(struct mosquitto *, const char *, bool , const char *, ...);
-static char *mqtt_host, *mqtt_user, *mqtt_password, *mqtt_topic;
+static char *mqtt_host, *mqtt_user, *mqtt_password, *mqtt_topic, *mqtt_identity;
 static int mqtt_port = 1883;
 static unsigned short debug_mode;
+static unsigned short verbose_flag;
 #define dfprintf if (debug_mode) fprintf
 int	      
 main (int argc, char *argv[])
@@ -30,9 +31,16 @@ main (int argc, char *argv[])
   char *buffer;
   int opt;
   struct mosquitto *m;
+  
+  mqtt_identity = "alsa_capture";
+  mqtt_host = "localhost";
+  mqtt_topic = "/environment/mic";
 
-	while ((opt = getopt(argc, argv, "h:u:p:P:vt:")) != -1) {
+	while ((opt = getopt(argc, argv, "a:i:h:u:p:P:vdt:")) != -1) {
 		switch(opt) {
+			case 'a':
+				audio_device = strdup(optarg);
+				break;
 			case 'h': /* host */
 				mqtt_host = strdup(optarg);
 				break;
@@ -48,11 +56,17 @@ main (int argc, char *argv[])
 			case 'u': /* user */
 				mqtt_user = strdup(optarg);
 				break;
+			case 'i':
+				mqtt_identity = strdup(optarg);
+				break;
 			case 'v':
+				verbose_flag++;
+				break;
+			case 'd':
 				debug_mode++;
 				break;
 			default:
-				printf("usage: mqtt_mic [-t topic] [-u user] [-h host] [-P passowrd] [-p port]\n");
+				printf("usage: mqtt_mic [-i identity] [-t topic] [-u user] [-h host] [-P passowrd] [-p port]\n");
 				exit(64);
 		}
 	}
@@ -62,7 +76,7 @@ main (int argc, char *argv[])
    }
 
    mosquitto_lib_init();
-   m= mosquitto_new("mqtt_alsa_capture", true, NULL);
+   m= mosquitto_new(mqtt_identity, true, NULL);
    mosquitto_username_pw_set(m, mqtt_user, mqtt_password);
 
    if (mosquitto_connect(m, mqtt_host, mqtt_port, 300) != MOSQ_ERR_SUCCESS) {
@@ -78,9 +92,9 @@ main (int argc, char *argv[])
   snd_pcm_hw_params_t *hw_params;
   snd_pcm_format_t format = SND_PCM_FORMAT_S16_LE;
 
-  if ((pcm_err = snd_pcm_open (&capture_handle, device, SND_PCM_STREAM_CAPTURE, 0)) < 0) {
+  if ((pcm_err = snd_pcm_open (&capture_handle, audio_device, SND_PCM_STREAM_CAPTURE, 0)) < 0) {
     dfprintf (stderr, "cannot open audio device %s (%s)\n", 
-             device,
+             audio_device,
              snd_strerror (pcm_err));
     exit (1);
   }
