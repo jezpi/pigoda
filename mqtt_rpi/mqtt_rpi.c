@@ -148,8 +148,13 @@ main(int argc, char **argv)
 		fprintf(stderr, "%s: failed to init\n", __PROGNAME);
 		exit(3);
 	}
+	if (myMQTT_conf.sensors == NULL) {
+		MQTT_printf("No sensors configured");
+		exit(3);
+	}
+
 	if (myMQTT_conf.pidfile != NULL) {
-		if ((mr_pidfile = pidfile_open(NULL, 0644, &procpid)) == NULL) {
+		if ((mr_pidfile = pidfile_open(myMQTT_conf.pidfile, 0644, &procpid)) == NULL) {
 			fprintf(stderr, "mqtt_rpi is already running with pid %d\n", procpid);
 			exit(3);
 		}
@@ -172,7 +177,7 @@ main(int argc, char **argv)
 	}
 
 	MQTT_log("Sensors init");
-	sensors_init(); /* wiringPiSetup() */
+	sensors_init(myMQTT_conf.sensors); /* wiringPiSetup() */
 	MQTT_log("Led act init");
 	startup_led_act(10, 100); /*  XXX ugly hack with magic number.
 				 It has a magic number which is just to wait until
@@ -180,8 +185,6 @@ main(int argc, char **argv)
 				 that inmediate data acquisition after reboot is not
 				 so critical. It is obviously relative and a workaround.
 				 */
-	MQTT_log("bmp85 init");
-	bmp85_init();
 	startup_fanctl();
 	if ((mosq = MQTT_init(&Mosquitto, false, __PROGNAME)) == NULL) {
 		fprintf(stderr, "%s: failed to init MQTT protocol \n", __PROGNAME);
@@ -713,38 +716,34 @@ pool_sensors(struct mosquitto *mosq)
 	int light;
 	float temp_in=0, temp_out = 0;
 	double pressure=0;
+	double value;
+	char	*endptr;
+	long pin;
 
+	sensor_t *sp;
+	sp = myMQTT_conf.sensors->sn_head;
+	do {
+		switch(sp->s_type) {
+			case SENS_W1:
+				value = get_temperature(sp->s_address);
+				break;
+			case SENS_I2C:
+				switch(sp->s_i2ctype) {
+					case I2C_PCF8591P:
+						value = pcf8591p_ain(sp->s_config);
+						break;
+					case I2C_BMP85:
+						value = get_pressure();
+						break;
+				}
+				break;
 
-	light = pcf8591p_ain(0);
-	if ((ret = MQTT_pub(mosq, "/environment/light", true, "%d", light)) == -1) {
-		MQTT_log("Failed to publish light %s\n", mosquitto_strerror(ret));
-		return (-1);
-	}
-
-	if ((temp_in = get_temperature("28-0000055a8be7")) != -1) {
-		if ((ret = MQTT_pub(mosq, "/environment/tempin", true, "%f", temp_in)) == -1) {
-			MQTT_log("Failed to publish tempin %s\n", mosquitto_strerror(ret));
-			return (-1);
 		}
-	} else {
-		MQTT_log("Failed to get tempin\n");
-		ret = -1;
-	}
-	if ((temp_out = get_temperature("28-000005d3355e")) != -1) {
-		if ((ret = MQTT_pub(mosq, "/environment/tempout", true, "%f", temp_out)) == -1) {
-			MQTT_log("Failed to publish tempout %s\n", mosquitto_strerror(ret));
-			
-		}
-	} else {
-		MQTT_log("Failed to get tempout: %s\n", strerror(errno));
-		ret = -1;
-	}
+		MQTT_pub(mosq, sp->s_channel, true, "%f", value);
 
-	pressure=get_pressure();
-	if ((MQTT_pub(mosq, "/environment/pressure", true, "%0.2f", pressure)) == -1) {
-		MQTT_log("Failed to publish pressure\n");
-		ret = -1;
-	}
+		sp = sp->s_next;
+	} while (sp != myMQTT_conf.sensors->sn_head && sp != NULL);
+
 	return (ret);
 }
 
