@@ -148,8 +148,13 @@ main(int argc, char **argv)
 		fprintf(stderr, "%s: failed to init\n", __PROGNAME);
 		exit(3);
 	}
+	if (myMQTT_conf.sensors == NULL) {
+		MQTT_printf("No sensors configured");
+		exit(3);
+	}
+
 	if (myMQTT_conf.pidfile != NULL) {
-		if ((mr_pidfile = pidfile_open(NULL, 0644, &procpid)) == NULL) {
+		if ((mr_pidfile = pidfile_open(myMQTT_conf.pidfile, 0644, &procpid)) == NULL) {
 			fprintf(stderr, "mqtt_rpi is already running with pid %d\n", procpid);
 			exit(3);
 		}
@@ -164,7 +169,8 @@ main(int argc, char **argv)
 	if (myMQTT_conf.pool_sensors_delay == 0)
 		myMQTT_conf.pool_sensors_delay = 1055000;  /* defaults to 1 sec */
 
-	if (fork_mqtt_pir(&Mosquitto) <= 0) {
+	
+	if (0 && fork_mqtt_pir(&Mosquitto) <= 0) {
 		MQTT_log("Fork failed!");
 		/* ...
 		 * exit() 
@@ -172,7 +178,7 @@ main(int argc, char **argv)
 	}
 
 	MQTT_log("Sensors init");
-	sensors_init(); /* wiringPiSetup() */
+	sensors_init(myMQTT_conf.sensors); /* wiringPiSetup() */
 	MQTT_log("Led act init");
 	startup_led_act(10, 100); /*  XXX ugly hack with magic number.
 				 It has a magic number which is just to wait until
@@ -180,10 +186,8 @@ main(int argc, char **argv)
 				 that inmediate data acquisition after reboot is not
 				 so critical. It is obviously relative and a workaround.
 				 */
-	MQTT_log("bmp85 init");
-	bmp85_init();
 	startup_fanctl();
-	if ((mosq = MQTT_init(&Mosquitto, false, __PROGNAME)) == NULL) {
+	if ((mosq = MQTT_init(&Mosquitto, false, (myMQTT_conf.identity == NULL?__PROGNAME:myMQTT_conf.identity))) == NULL) {
 		fprintf(stderr, "%s: failed to init MQTT protocol \n", __PROGNAME);
 		MQTT_log("%s: failed to init MQTT protocol \n", __PROGNAME);
 
@@ -306,11 +310,13 @@ MQTT_loop(void *m, int tout)
 				main_loop = false;
 				break;
 			case MOSQ_ERR_CONN_LOST:
-				MQTT_log( "Connection lost (%d)\n", errno);
+				MQTT_printf("MQTT_loop: Connection lost (%d)\n", errno);
+				MQTT_log( "MQTT_loop: Connection lost (%d)\n", errno);
 				/*main_loop = false; */
 				mqtt_conn_dead = true;
 				break;
 			case MOSQ_ERR_NO_CONN:
+				MQTT_printf("No connection (%d)\n", errno);
 				MQTT_log( "No connection lost\n");
 				/*main_loop = false;*/
 				mqtt_conn_dead = true;
@@ -327,7 +333,8 @@ MQTT_loop(void *m, int tout)
 				main_loop = false;
 				break;
 			case MOSQ_ERR_CONN_REFUSED:
-				MQTT_log( "Connection refused\n");
+				MQTT_log( "MQTT_loop: Connection refused\n");
+				MQTT_printf( "MQTT_loop: Connection refused\n");
 				mqtt_conn_dead = true;/* XXX temporal */
 				/*main_loop = false;*/
 				break;
@@ -359,6 +366,7 @@ static void
 my_subscribe_callback(struct mosquitto *mosq, void *userdata, int mid, int qos_count, const int *granted_qos)
 {
 	int i;
+	MQTT_printf("DEBUG: subscrited (mid: %d): %d\n", mid, granted_qos[0]);
 	MQTT_log( "DEBUG: Subscribed (mid: %d): %d", mid, granted_qos[0]);
 	for(i=1; i<qos_count; i++){
 		MQTT_log( ", %d", granted_qos[i]);
@@ -482,7 +490,7 @@ my_message_callback(struct mosquitto *mosq, void *userdata, const struct mosquit
 					MQTT_log( "ERROR. Unknown command fan %s/%s= %d\n", msg->topic, msg->payload, cmd);
 				}
 				break;
-
+ 
 		}
 	}else {
 		MQTT_log( "ERROR! Empty message on %s\n", msg->topic);
@@ -541,6 +549,7 @@ MQTT_init(mqtt_hnd_t *m, bool c_sess, const char *id)
 	mosquitto_lib_init();
 	mosquitto_lib_version(&lv_major, &lv_minor, &lv_rev);
 	MQTT_log( "%s@%s libmosquitto %d.%d rev=%d\n", id, __HOSTNAME, lv_major, lv_minor, lv_rev);
+	MQTT_printf( "Init\t%s@%s libmosquitto %d.%d rev=%d\n", id, __HOSTNAME, lv_major, lv_minor, lv_rev);
 	strncpy(m->mqh_id, id, sizeof(m->mqh_id));
 	bzero(m->mqh_msgbuf, sizeof(m->mqh_msgbuf));
 	m->mqh_clean_session = c_sess;
@@ -592,7 +601,10 @@ MQTT_pub(struct mosquitto *mosq, const char *topic, bool perm, const char *fmt, 
 	int	mid = 0;
 	int	ret, pubret;
 
-        if (mqtt_conn_dead || ! mqtt_connected) return (0);
+        if (mqtt_conn_dead || ! mqtt_connected) {
+		MQTT_printf("Publish too early. Socket not connected (%s)\n", topic);
+		return (0);
+	}
 	va_start(lst, fmt);
 	vsnprintf(msgbuf, sizeof msgbuf, fmt, lst);
 	va_end(lst);
@@ -685,6 +697,7 @@ fork_mqtt_pir(mqtt_hnd_t *mqh)
 {
 	pid_t 	chpid;
 	int     wstatus;
+
 #define MQTT_PIR_PATH     "/home/jez/repos/pigoda/mqtt_rpi/mqttpir/mqttpir"
 	switch((chpid = fork())) {
 		case 0: /* XXX hardcoded path */
@@ -713,38 +726,35 @@ pool_sensors(struct mosquitto *mosq)
 	int light;
 	float temp_in=0, temp_out = 0;
 	double pressure=0;
+	double value;
+	char	*endptr;
+	long pin;
 
+	sensor_t *sp;
+	sp = myMQTT_conf.sensors->sn_head;
+	do {
+		switch(sp->s_type) {
+			case SENS_W1:
+				value = get_temperature(sp->s_address);
+				break;
+			case SENS_I2C:
+				switch(sp->s_i2ctype) {
+					case I2C_PCF8591P:
+						value = pcf8591p_ain(sp->s_config);
+						break;
+					case I2C_BMP85:
+						value = get_pressure();
+						break;
+				}
+				break;
 
-	light = pcf8591p_ain(0);
-	if ((ret = MQTT_pub(mosq, "/environment/light", true, "%d", light)) == -1) {
-		MQTT_log("Failed to publish light %s\n", mosquitto_strerror(ret));
-		return (-1);
-	}
-
-	if ((temp_in = get_temperature("28-0000055a8be7")) != -1) {
-		if ((ret = MQTT_pub(mosq, "/environment/tempin", true, "%f", temp_in)) == -1) {
-			MQTT_log("Failed to publish tempin %s\n", mosquitto_strerror(ret));
-			return (-1);
 		}
-	} else {
-		MQTT_log("Failed to get tempin\n");
-		ret = -1;
-	}
-	if ((temp_out = get_temperature("28-000005d3355e")) != -1) {
-		if ((ret = MQTT_pub(mosq, "/environment/tempout", true, "%f", temp_out)) == -1) {
-			MQTT_log("Failed to publish tempout %s\n", mosquitto_strerror(ret));
-			
+		if (MQTT_pub(mosq, sp->s_channel, false, "%f", value) < 0) {
+			return(-1);
 		}
-	} else {
-		MQTT_log("Failed to get tempout: %s\n", strerror(errno));
-		ret = -1;
-	}
+		sp = sp->s_next;
+	} while (sp != myMQTT_conf.sensors->sn_head && sp != NULL);
 
-	pressure=get_pressure();
-	if ((MQTT_pub(mosq, "/environment/pressure", true, "%0.2f", pressure)) == -1) {
-		MQTT_log("Failed to publish pressure\n");
-		ret = -1;
-	}
 	return (ret);
 }
 

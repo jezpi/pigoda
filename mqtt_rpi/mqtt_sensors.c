@@ -26,28 +26,66 @@
 #include <mcp23017.h>
 #include <pcf8591.h>
 #include <errno.h>
+#include <string.h>
 
+#include "mqtt.h"
 #include "mqtt_sensors.h"
 #include "bmp85/bmp85.h"
 
-int sensors_init(void) {
+int 
+sensors_init(sensors_t *sn) 
+{
+	sensor_t 	*sp;
+	char 		*endptr;
+	long 		i2caddress;
 
 	wiringPiSetup();
+	sp = sn->sn_head;
+	do {
+		switch(sp->s_type) {
+			case SENS_I2C:
+				switch(sp->s_i2ctype) {
+					case I2C_PCF8591P:
+						i2caddress = strtol(sp->s_address, &endptr, 16);
+						pcf8591Setup(PIN_BASE, i2caddress);
+						break;
+					case I2C_BMP85:
+						bmp85_init();
+						/* MQTT_log */
+						break;
+					default:
+						return (-1);
+				}
+			break;
+			case SENS_W1:
+				/* NOP */
+			break;
+			default:
+				return (-1);
+			
+		}
+		sp = sp->s_next;
+	} while (sp != NULL && sp != sn->sn_head);
 	
-	pcf8591Setup(PIN_BASE, 0x48);
+
 
 }
 
-int pcf8591p_ain(unsigned int pin) {
-	int ret;
-	ret = analogRead(PIN_BASE+pin);
+float pcf8591p_ain(char *pinnum) {
+	float ret;
+	int  pin;
+	char *endptr;
+
+	pin = (int) strtol(pinnum, &endptr, 10);
+	ret = (float) analogRead(PIN_BASE+pin);
 	return (ret);
 }
 
 
 #define W1_DEVS_PATH "/sys/bus/w1/devices/"
 
-static char *getraw(const char *devpath)
+static char *
+getraw(const char *devpath)
 {
 	FILE	*f;
 	char	rbuf[BUFSIZ], *chp, *saveptr;
@@ -58,7 +96,7 @@ static char *getraw(const char *devpath)
 	}
 
 	while ((chp = fgets(rbuf, sizeof rbuf, f)) != NULL) {
-		for ( chp = strtok(rbuf, " \t\n", &saveptr) ; chp != NULL; chp = strtok(saveptr, " \t\n", &saveptr))
+		for ( chp = strtok_r(rbuf, " \t\n", &saveptr) ; chp != NULL; chp = strtok_r(saveptr, " \t\n", &saveptr))
 		{
 			if (!strncmp(chp, "t=", 2)) {
 				tempstr = strdup((chp+2));

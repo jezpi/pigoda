@@ -20,7 +20,7 @@ testBMP085.o: bmp85/testBMP085.c
 	$(CC) $(DFLAGS) $(CFLAGS) -pipe -c $< 
 
 mqtt_parse_config.o: mqtt_parse_config.c
-	$(CC) $(DFLAGS) $(CFLAGS) $(DFLAGS) -pipe -c $<  
+	$(CC) -DDEBUG $(DFLAGS) $(CFLAGS) $(DFLAGS) -pipe -c $<  
 
 
 mqtt_sensors.o: mqtt_sensors.c
@@ -37,7 +37,7 @@ clean:
 parser: mqtt_parse_config.o mqtt_parser_test.o
 	@ $(CC) $(CFLAGS) $+ -o $@ -lyaml 
 	@echo "Executing parser"
-	@./parser
+	@cc mqtt_parser_test.c mqtt_parse_config.c -oparser_test -lyaml -DDEBUG
 
 
 install: mqtt_rpi
@@ -63,3 +63,6 @@ run: mqtt_rpi
 
 gdb: mqtt_rpi
 	gdb ./mqtt_rpi 
+
+debiandeps:
+	apt-get install  libyaml-dev sqlite3 libsqlite3-dev libbsd-dev wiringpi
