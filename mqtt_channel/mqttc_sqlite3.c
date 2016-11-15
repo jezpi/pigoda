@@ -25,6 +25,24 @@ MQTT_detachdb(MQTT_db_t *mq_db) {
 }
 
 int
+MQTT_createtable(MQTT_db_t *mq_db, char *tbname)
+{
+	int 	ret = -1;
+	char 	sql_buf[BUFSIZ];
+	char *sqliteErrMsg = 0;
+
+	snprintf(sql_buf, sizeof(sql_buf), "CREATE TABLE IF NOT EXISTS %s(timestamp INT, val REAL);", tbname);	
+	ret = sqlite3_exec(mq_db->Mdb_hnd, sql_buf, NULL, 0, &sqliteErrMsg);
+	if (ret != SQLITE_OK) {
+		MQTT_log("Sqlite err while storing light: %s  ", sqliteErrMsg);
+		sqlite3_free(sqliteErrMsg);
+		ret = -1;
+	} else 
+		ret = 0;
+	return (ret);
+}
+
+int
 MQTT_poli_store(MQTT_db_t *mq_db, char *tbname, float value)
 {
 	char 	sql_buf[BUFSIZ];
