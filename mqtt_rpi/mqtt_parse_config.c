@@ -65,7 +65,7 @@ mqtt_global_cfg_t myMQTT;
 
 static char *curvar;
 FILE *debuglog;
-enum {V_UNKNOWN, V_PIDFILE, V_LOGFILE, V_DEBUG, V_SERVER, V_MQTTUSER, V_MQTTPASS, V_MQTTPORT, V_DAEMON, V_DELAY} c_opts = V_UNKNOWN;
+enum {V_UNKNOWN, V_PIDFILE, V_LOGFILE, V_DEBUG, V_SERVER, V_MQTTUSER, V_MQTTPASS, V_MQTTPORT, V_DAEMON, V_DELAY, V_IDENTITY} c_opts = V_UNKNOWN;
 
 
 enum {S_MODNAME, S_CHANNEL, S_MODULE, S_TYPE, S_CONFIG, S_VAR , S_ADDRESS, S_I2CTYPE, S_INIT} module_opts = S_INIT;
@@ -82,6 +82,8 @@ proc_main_opt(char *scalar_value)
 		c_opts = V_DEBUG;
 	} else if (!strcasecmp(scalar_value, "delay")) {
 		c_opts = V_DELAY;
+	} else if (!strcasecmp(scalar_value, "identity")) {
+		c_opts = V_IDENTITY;
 	} else if (!strcasecmp(scalar_value, "mqtt_user")) {
 		c_opts = V_MQTTUSER;
 	} else if (!strcasecmp(scalar_value, "logfile")) {
@@ -135,6 +137,10 @@ proc_main_opt(char *scalar_value)
 				break;
 			case V_LOGFILE:
 				myMQTT.logfile = strdup(scalar_value);
+				c_opts = V_UNKNOWN;
+				break;
+			case V_IDENTITY:
+				myMQTT.identity = strdup(scalar_value);
 				c_opts = V_UNKNOWN;
 				break;
 
