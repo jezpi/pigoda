@@ -26,7 +26,7 @@ mqtt_global_cfg_t myMQTT;
 
 static char *curvar;
 FILE *debuglog;
-enum {V_UNKNOWN, V_PIDFILE, V_LOGFILE, V_DEBUG, V_SERVER, V_MQTTUSER, V_MQTTPASS, V_MQTTPORT, V_CHANNEL_PREFIX, V_SQLITE_PATH} c_opts = V_UNKNOWN;
+enum {V_UNKNOWN, V_PIDFILE, V_LOGFILE, V_DEBUG, V_SERVER, V_MQTTUSER, V_MQTTPASS, V_MQTTPORT, V_CHANNEL_PREFIX, V_SQLITE_PATH, V_IDENTITY} c_opts = V_UNKNOWN;
 
 static int yaml_assign_scalar(yaml_event_t *t)
 {
@@ -51,6 +51,8 @@ static int yaml_assign_scalar(yaml_event_t *t)
 		c_opts = V_CHANNEL_PREFIX;
 	} else if (!strcasecmp(t->data.scalar.value, "sqlite3_db")) {
 		c_opts = V_SQLITE_PATH;
+	} else if (!strcasecmp(t->data.scalar.value, "identity")) {
+		c_opts = V_IDENTITY;
 	} else {
 		
 		switch (c_opts) {
@@ -88,6 +90,10 @@ static int yaml_assign_scalar(yaml_event_t *t)
 				break;
 			case V_SQLITE_PATH:
 				myMQTT.sqlite3_db = strdup(t->data.scalar.value);
+				c_opts = V_UNKNOWN;
+				break;
+			case V_IDENTITY:
+				myMQTT.identity = strdup(t->data.scalar.value);
 				c_opts = V_UNKNOWN;
 				break;
 		}
