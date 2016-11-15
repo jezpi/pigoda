@@ -14,21 +14,39 @@
 static char *mqtt_host, *mqtt_user, *mqtt_password, *mqtt_topic;
 static int mqtt_port = 1883;
 static unsigned short debug_mode;
-#define DEFAULT_MQTT_PIN 6
+#define DEFAULT_PIR_PIN 6
+#define DEFAULT_LED_PIN 0
+static void usage(void);
 
 static int  MQTT_pub(struct mosquitto *mosq, const char *topic, bool perm, const char *fmt, ...);
 int
 main(int argc, char **argv)
 {
-	int pinnum = DEFAULT_MQTT_PIN;
+	int pirpin = DEFAULT_PIR_PIN;
+	int ledpin = DEFAULT_LED_PIN;
+	char *identity = "mqtt_pir";
 	int val;
 	int opt;
 	struct mosquitto *m;
 
-	while ((opt = getopt(argc, argv, "h:u:p:P:vt:")) != -1) {
+	if (argc < 2) {
+		usage();
+		exit(64);
+	}
+
+	while ((opt = getopt(argc, argv, "i:a:h:l:u:p:P:vt:")) != -1) {
 		switch(opt) {
+			case 'i':
+				identity = strdup(optarg);
+				break;
+			case 'a':
+				pirpin = atoi(optarg);
+				break;
 			case 'h': /* host */
 				mqtt_host = strdup(optarg);
+				break;
+			case 'l':
+				ledpin = atoi(optarg);
 				break;
 			case 't': /* topic */
 				mqtt_topic = strdup(optarg);
@@ -46,40 +64,45 @@ main(int argc, char **argv)
 				debug_mode++;
 				break;
 			default:
-				printf("usage: mqttpir [-t topic] [-u user] [-h host] [-P passowrd] [-p port]\n");
-				printf("PIR pin defaults to %d\n", pinnum);
-				printf("\tRev. %d\n", piBoardRev());
+				usage();
+				exit(64);
 		}
 	}
 	mosquitto_lib_init();
-	m= mosquitto_new("mqtt_pir", true, NULL);
+	m= mosquitto_new(identity, true, NULL);
 	mosquitto_username_pw_set(m, mqtt_user, mqtt_password);
 
-	mosquitto_connect(m, mqtt_user, mqtt_port, 300);
+	if (mosquitto_connect(m, mqtt_host, mqtt_port, 300) != MOSQ_ERR_SUCCESS) {
+		if (debug_mode) 
+			printf("connect failure %s@%s:%d\n", mqtt_user, mqtt_host, mqtt_port);
+		exit(3);
+	} else {
+		printf("Connected to %s\n", mqtt_host);
+	}
          	
 	wiringPiSetup();
 
-	pinMode(pinnum, INPUT);
-	pinMode(0, OUTPUT);
-	digitalWrite(pinnum, HIGH);
+	pinMode(pirpin, INPUT);
+	pinMode(ledpin, OUTPUT); /* Pin 0? */
+	digitalWrite(pirpin, HIGH);
 
 	int tick;
 	int positive;
 	bool actled = false;
 	for (; ; ) {
 		for (tick = 0, positive=0; tick < 60; tick++) {
-			if ((val = digitalRead(pinnum)) == HIGH) {
+			if ((val = digitalRead(pirpin)) == HIGH) {
 				positive++;
-				digitalWrite(0, HIGH);
+				digitalWrite(ledpin, HIGH);
 				actled = true;
 				fprintf(stderr, ".");
 				fflush(stderr);
 			} else if (actled == true) {
-				digitalWrite(0, LOW);
+				digitalWrite(ledpin, LOW);
 			}
 			usleep(1000000);
 			if (actled == true) {
-				digitalWrite(0, LOW);
+				digitalWrite(ledpin, LOW);
 				actled = false;
 			}
 		}
@@ -114,4 +137,15 @@ MQTT_pub(struct mosquitto *mosq, const char *topic, bool perm, const char *fmt, 
 	} else
 		ret = -1;
 	return (ret);
+}
+
+static void 
+usage(void)
+{
+	printf("usage: mqttpir [-l ledpin] [-i identity] [-a pin] [-t topic] [-u user] [-h host] [-P passowrd] [-p port]\n");
+	printf("\tPIR pin defaults to %d\n", DEFAULT_PIR_PIN);
+	printf("\tLED pin defaults to %d\n", DEFAULT_LED_PIN);
+	printf("\tDO NOT CHANGE THESE VALUES UNLESS YOU KNOW WHAT YOU'RE DOING\n");
+	printf("Board Rev. %d\n", piBoardRev());
+	return;
 }
