@@ -257,7 +257,7 @@ main(int argc, char **argv)
 	}
 
 
-	if ((mosq = MQTT_init(&Mosquitto, false, __PROGNAME)) == NULL) {
+	if ((mosq = MQTT_init(&Mosquitto, false, (myMQTT_conf.identity == NULL?__PROGNAME:myMQTT_conf.identity))) == NULL) {
 		fprintf(stderr, "%s: failed to init MQTT protocol \n", __PROGNAME);
 		exit(3);
 
@@ -564,6 +564,7 @@ my_message_callback(struct mosquitto *mosq, void *userdata, const struct mosquit
 			val = atof((char *)msg->payload);
 			if ((sp = scr_stat_find(&screen_data, dataf)) == NULL) {
 				sp = scr_stat_new(&screen_data, dataf, val);
+				MQTT_createtable(sqlitedb, dataf);
 			} else {
 				sp->ss_value = val;
 			}
