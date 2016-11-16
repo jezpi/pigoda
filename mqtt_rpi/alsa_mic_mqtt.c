@@ -22,6 +22,7 @@ static char *mqtt_host, *mqtt_user, *mqtt_password, *mqtt_topic, *mqtt_identity;
 static int mqtt_port = 1883;
 static unsigned short debug_mode;
 static unsigned short verbose_flag;
+static void usage(void);
 #define dfprintf if (debug_mode) fprintf
 int	      
 main (int argc, char *argv[])
@@ -66,11 +67,12 @@ main (int argc, char *argv[])
 				debug_mode++;
 				break;
 			default:
-				printf("usage: mqtt_mic [-i identity] [-t topic] [-u user] [-h host] [-P passowrd] [-p port]\n");
+				usage();
 				exit(64);
 		}
 	}
    if (mqtt_host == NULL || mqtt_user == NULL || mqtt_password == NULL || mqtt_topic == NULL) {
+	   usage();
 	   printf("too few arguments\n");
 	   exit(64);
    }
@@ -194,7 +196,7 @@ main (int argc, char *argv[])
     if (MQTT_pub(m, mqtt_topic, false, "%f", ((float) (fsum/frames))) < 0) {
 	    fprintf(stderr, "publish on %s failure!\n", mqtt_topic);
     }
-    sleep(1);
+    sleep(5);
   }
 
   /*free(buffer);*/
@@ -228,4 +230,12 @@ MQTT_pub(struct mosquitto *mosq, const char *topic, bool perm, const char *fmt, 
 		ret = -1;
 	}
 	return (ret);
+}
+
+
+static void
+usage(void)
+{
+	printf("usage: mqtt_mic [-a audio_device] [-i identity] [-t topic] [-u user] [-h host] [-P passowrd] [-p port] -v -d\n");
+
 }
