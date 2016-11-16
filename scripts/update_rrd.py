@@ -2,9 +2,6 @@
 
 import rrdtool, time,os,sys,datetime,sqlite3;
 
-
-
-
 def update_db(sqlitedb, table):
         rrdfile=rrddbpath+"/"+table+".rrd";
 
@@ -19,7 +16,11 @@ def update_db(sqlitedb, table):
 	for row in cur:
 		sup=str(row[0])+":"+str(row[1]);
 		#print sup;
-		rrdtool.update(rrdfile, sup);
+		try:
+			rrdtool.update(rrdfile, sup);
+		except Exception as e:
+			print "Failed to update "+str(row[0])+" Exception code:"+str(e);
+
 	conn.close()
 
 #######
@@ -28,6 +29,12 @@ def update_db(sqlitedb, table):
 
 dbfile="/var/db/pigoda/sensorsv2.db";
 rrddbpath="/var/db/pigoda/rrd/";
+
+if len(sys.argv) < 2:
+	print "usage: update_rrd [arg]"
+	sys.exit(0);
+	
 cmd=sys.argv[1]
 
 update_db(dbfile, cmd);
+
