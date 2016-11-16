@@ -51,7 +51,7 @@ echo "=> Creating png graph - pir"
 	rrdtool graph ${RRD_GRAPH_PATH}/pir.png \
 		-w 785 -h 120 -a PNG \
 		--slope-mode \
-		--start now-12h --end now \
+		--start 'now-12h' --end now \
 		--font='DEFAULT:7:' \
 		--title="PIR sensor stats - movement rate in one second" \
 		--watermark="Date `date`" \
@@ -70,7 +70,7 @@ echo "=> Creating png graph - tempin"
 	rrdtool graph ${RRD_GRAPH_PATH}/tempin.png \
 		-w 785 -h 120 -a PNG \
 		--slope-mode \
-		--start 'now-12h' --end now \
+		--start 'now-3h' --end now \
 		--font='DEFAULT:7:' \
 		--title="Temperature inside" \
 		--watermark="Date `date`" \
@@ -91,7 +91,7 @@ echo "=> Creating png graph - guerni"
 	rrdtool graph ${RRD_GRAPH_PATH}/tempin_guerni.png \
 		-w 785 -h 120 -a PNG \
 		--slope-mode \
-		--start now-10h --end now \
+		--start 'now-3h' --end now \
 		--font='DEFAULT:7:' \
 		--title="Temperature inside - guerni" \
 		--watermark="Date `date`" \
@@ -113,7 +113,7 @@ echo "=> Creating png graph - tempin"
 	rrdtool graph ${RRD_GRAPH_PATH}/tempin_weekly.png \
 		-w 785 -h 120 -a PNG \
 		--slope-mode \
-		--start 'now-14d' --end now \
+		--start 'now-3h' --end now \
 		--font='DEFAULT:7:' \
 		--title="Temperature inside - past 14 days" \
 		--watermark="Date `date`" \
@@ -157,7 +157,7 @@ echo "=> Creating png graph - tempmix"
 rrdtool graph ${RRD_GRAPH_PATH}/tempmix.png \
 	-w 785 -h 420 -a PNG \
 	--slope-mode \
-	--start now-46h --end now \
+	--start 'now-3h' --end now \
 	--font='DEFAULT:7:' \
 	--title="Relation temperature " \
 	--watermark="Date `date`" \
@@ -193,7 +193,7 @@ echo "=> Creating png graph - vc_temp"
 rrdtool graph ${RRD_GRAPH_PATH}/temperature_daily.png \
 	-w 785 -h 120 -a PNG \
 	--slope-mode \
-	--start 'now-1d' --end now \
+	--start 'now-3h' --end now \
 	--font='DEFAULT:7:' \
 	--title="vc_core temperature whole day" \
 	--watermark="Date `date`" \
@@ -212,7 +212,7 @@ graph_vc_temp_pastdays () {
 	rrdtool graph ${RRD_GRAPH_PATH}/temperature_3_days.png \
 		-w 785 -h 120 -a PNG \
 		--slope-mode \
-		--start 'now-14d' --end now \
+		--start 'now-14d' --end 'now-60s' \
 		--font='DEFAULT:7:' \
 		--title="vc_core temperature past 3 days" \
 		--watermark="Date `date`" \
@@ -230,7 +230,7 @@ echo "=> Creating png graph - light"
 rrdtool graph ${RRD_GRAPH_PATH}/light.png \
 	-w 785 -h 120 -a PNG \
 	--slope-mode \
-	--start 'now-48h' --end 'now-60s' \
+	--start 'now-3h' --end 'now-60s' \
 	--font='DEFAULT:7:' \
 	--title="Light past 12 hours" \
 	--watermark="Date `date`" \
@@ -250,7 +250,7 @@ echo "=> Creating png graph - light weekly"
 rrdtool graph ${RRD_GRAPH_PATH}/light_weekly.png \
 	-w 785 -h 120 -a PNG \
 	--slope-mode \
-	--start 'now-14d' --end now \
+	--start 'now-7d' --end now \
 	--font='DEFAULT:7:' \
 	--title="Light past 7 days" \
 	--watermark="Date `date`" \
@@ -310,7 +310,7 @@ echo "=> Creating png graph - pressure"
 rrdtool graph ${RRD_GRAPH_PATH}/pressure.png \
 -w 785 -h 120 -a PNG \
 --slope-mode \
---start now-1d --end now-10m \
+--start 'now-1d' --end 'now-600s' \
 --font='DEFAULT:7:' \
 --title="Pressure" \
 --watermark="Date `date`" \
@@ -331,7 +331,7 @@ echo "=> Creating png graph - pressure daily"
 rrdtool graph ${RRD_GRAPH_PATH}/pressure_daily.png \
 -w 785 -h 120 -a PNG \
 --slope-mode \
---start now-14d --end now \
+--start 'now-24h' --end now \
 --font='DEFAULT:7:' \
 --title="Pressure daily" \
 --watermark="Date `date`" \
@@ -360,7 +360,7 @@ echo "=> Creating png graph - $1 "
 rrdtool graph ${RRD_GRAPH_PATH}/$1.png \
 -w 785 -h 120 -a PNG \
 --slope-mode \
---start now-1h --end now \
+--start 'now-1h' --end now \
 --font='DEFAULT:7:' \
 --title="$1" \
 --watermark="Date `date`" \
@@ -410,7 +410,7 @@ echo "=> Creating png graph - micmade "
 rrdtool graph ${RRD_GRAPH_PATH}/micmade.png \
 -w 785 -h 120 -a PNG \
 --slope-mode \
---start 'now-6h' --end 'now-60s' \
+--start 'now-2h' --end 'now-60s' \
 --font='DEFAULT:7:' \
 --title="Mic made" \
 --watermark="Date `date`" \
