@@ -6,7 +6,7 @@ offs=$((dt-10800))
 
 graph_micguernilaptop () {
 	name=micguernilaptop
-	echo "=> Creating png graph - $name"
+	echo "=> Creating png graph - microphone on my laptop in guerni"
 	rrdtool graph ${RRD_GRAPH_PATH}/${name}.png \
 		-w 785 -h 120 -a PNG \
 		--slope-mode \
@@ -47,7 +47,7 @@ graph_unknown () {
 }
 
 graph_pir() {
-echo "=> Creating png graph - pir"
+echo "=> Creating png graph - pir on badacz"
 	rrdtool graph ${RRD_GRAPH_PATH}/pir.png \
 		-w 785 -h 120 -a PNG \
 		--slope-mode \
@@ -66,7 +66,7 @@ echo "=> Creating png graph - pir"
 }
 
 graph_tempin() {
-echo "=> Creating png graph - tempin"
+echo "=> Creating png graph - tempin on badacz in made"
 	rrdtool graph ${RRD_GRAPH_PATH}/tempin.png \
 		-w 785 -h 120 -a PNG \
 		--slope-mode \
@@ -87,15 +87,16 @@ echo "=> Creating png graph - tempin"
 }
 
 graph_tempin_guerni() {
-echo "=> Creating png graph - guerni"
+echo "=> Creating png graph - temperature in guerni"
 	rrdtool graph ${RRD_GRAPH_PATH}/tempin_guerni.png \
-		-w 785 -h 120 -a PNG \
+		-w 785 -h 180 -a PNG \
 		--slope-mode \
-		--start 'now-3h' --end now \
+		--start 'now-12h' --end 'now' \
+		--upper-limit 25 \
+		--lower-limit 15 \
 		--font='DEFAULT:7:' \
 		--title="Temperature inside - guerni" \
 		--watermark="Date `date`" \
-		--alt-y-grid \
 		--rigid \
 		DEF:temp_in=${RRD_DB_PATH}/tempin_guerni.rrd:tempin_guerni:AVERAGE \
 		VDEF:tempinlast=temp_in,LAST \
@@ -109,7 +110,7 @@ echo "=> Creating png graph - guerni"
 
 
 graph_tempin_weekly() {
-echo "=> Creating png graph - tempin"
+echo "=> Creating png graph - temperature inside in guerni"
 	rrdtool graph ${RRD_GRAPH_PATH}/tempin_weekly.png \
 		-w 785 -h 120 -a PNG \
 		--slope-mode \
@@ -226,13 +227,13 @@ graph_vc_temp_pastdays () {
 
 graph_light () {
 
-echo "=> Creating png graph - light"
+echo "=> Creating png graph - light in made"
 rrdtool graph ${RRD_GRAPH_PATH}/light.png \
 	-w 785 -h 120 -a PNG \
 	--slope-mode \
 	--start 'now-3h' --end 'now-60s' \
 	--font='DEFAULT:7:' \
-	--title="Light past 12 hours" \
+	--title="Light past 3 hours" \
 	--watermark="Date `date`" \
 	--alt-y-grid \
 	--rigid \
@@ -316,12 +317,17 @@ rrdtool graph ${RRD_GRAPH_PATH}/pressure.png \
 --watermark="Date `date`" \
 --alt-y-grid \
 --rigid \
+VDEF:pressuremax=pressure,MAXIMUM \
+VDEF:pressuremin=pressure,MINIMUM \
 DEF:pressure=${RRD_DB_PATH}/pressure.rrd:pressure:AVERAGE \
-AREA:pressure#008000:"Pressure (hPa)" \
+AREA:pressure#008008:"Pressure (hPa)" \
+LINE1:pressuremax#FF0000:"Pressure max (hPa)\n":dashes \
+LINE1:pressuremin#006680:"Pressure min (hPa)\n":dashes \
 GPRINT:pressure:MAX:"Max\: %5.2lf" \
 GPRINT:pressure:MIN:"Min\: %5.2lf" \
 GPRINT:pressure:LAST:"Last\: %5.2lf"  \
 GPRINT:pressure:AVERAGE:"Avg\: %5.2lf" 
+
 
 }
 
@@ -380,11 +386,11 @@ GPRINT:$1:AVERAGE:"Avg\: %5.2lf\n"
 }
 
 graph_mic_guerni() {
-echo "=> Creating png graph - mic guerni"
+echo "=> Creating png graph - microphone in guerni connected to rpi"
 rrdtool graph ${RRD_GRAPH_PATH}/mic_guerni.png \
 -w 785 -h 120 -a PNG \
 --slope-mode \
---start now-1h --end now \
+--start 'now-1h' --end 'now' \
 --font='DEFAULT:7:' \
 --title="Mic guerni" \
 --watermark="Date `date`" \
@@ -406,7 +412,7 @@ GPRINT:mic:AVERAGE:"Avg\: %5.2lf\n"
 }
 
 graph_micmade() {
-echo "=> Creating png graph - micmade "
+echo "=> Creating png graph - microphone in made on my laptop "
 rrdtool graph ${RRD_GRAPH_PATH}/micmade.png \
 -w 785 -h 120 -a PNG \
 --slope-mode \
@@ -443,65 +449,14 @@ update_graphs () {
 	fi
 }
 
-#update_graphs $1
-#eval graph_$1
-graph_all () {
-for rrdf in $(ls /var/db/pigoda/rrd/*.rrd);
-do
-	f=`basename ${rrdf%%.rrd}`
-	update_graphs $f
-	poligraph $f
-done
-exit
-}
-
+if [ -z ${1}  ]; then
+	echo "$0 commands: [exp|everything]"
+	exit 64;
+fi
 
 for cmd in $@ 
 do
 	case $cmd in
-		tempin_now)
-			update_graphs tempin;
-			graph_tempin;
-			;;
-		pressure_now)
-			update_graphs pressure;
-			graph_pressure;
-			;;
-		pir)
-			graph_pir;
-			;;
-		mic)
-			graph_mic;
-			;;
-		light)
-			graph_light;
-			;;
-		pressure)
-			graph_pressure;
-			;;
-
-		all)
-			update_graphs light;
-			graph_light;
-			update_graphs pressure;
-			graph_pressure;
-			update_graphs tempin;
-			graph_tempin;
-			update_graphs tempout;
-			graph_tempout;
-			update_graphs pir;
-			graph_pir;
-			update_graphs mic_guerni;
-			graph_mic_guerni;
-			update_graphs micmade;
-			graph_micmade;
-			update_graphs tempin_guerni;
-			graph_tempin_guerni;
-			echo "=> Done!";
-
-			exit 0;
-			;;
-
 		exp)
 			graph_vc_temp_pastdays
 			graph_tempmix
@@ -511,9 +466,6 @@ do
 			graph_pir;
 			graph_light_weekly;
 
-			;;
-		batch)
-			graph_all;
 			;;
 		everything)
 			:> /var/www/default/mq_graphs/graphs.html
@@ -531,7 +483,7 @@ do
 			done
 			;;
 		*)
-			echo "$0 commands: [tempin_now|all]"
+			echo "$0 commands: [exp|everything]"
 			exit 64;
 			;;
 	esac
