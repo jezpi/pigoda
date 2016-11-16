@@ -12,5 +12,6 @@ extern MQTT_db_t *MQTT_initdb(const char *);
 extern int MQTT_detachdb(MQTT_db_t *);
 extern int MQTT_store(MQTT_db_t *, MQTT_data_type_t, float);
 extern int MQTT_poli_store(MQTT_db_t *, char *, float );
+extern int MQTT_createtable(MQTT_db_t *, char *);
 
 #endif /*  ! _MQTT_DB_H_ */
