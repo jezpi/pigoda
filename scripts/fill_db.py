@@ -8,50 +8,48 @@ import curses
 def printoff(off):
 	return time.strftime("%c",time.gmtime(off))
 
-def fill_db_vc_temp(sqlitedb, offset):
-	conn = sqlite3.connect(sqlitedb);
-	cur = conn.cursor();
-	cur.execute("SELECT * from vc_temp_now WHERE times > ? ORDER BY times", [str(offset)]);
-	for row in cur:
-		sup=str(row[0])+":"+str(row[1]);
-		print sup;
-		try:
-			rrdtool.update('light.rrd', sup);
-		except:
-			print "rrd failure!"
 
 
-def create_db(dsname, offs, step=60 ):
-        rrdfile=rrdpath+dsname+".rrd"
+def create_rrd_db(dsname, offs, step=60 ):
+        rrdf=rrdpath+"/"+dsname+".rrd"
 	try:
-		os.remove(rrdfile);
+		os.remove(rrdf);
 	except:
-		win.addstr(6, 0, "Failed to remove "+rrdfile);
+		win.addstr(6, 0, "Failed to remove "+rrdf);
 		win.refresh();
         finally:
-            win.addstr(6, 0, "RRD file: "+rrdfile+" has been removed");
+            win.addstr(6, 0, "RRD file: "+rrdf+" has been removed");
 	    win.refresh();
 
-        win.addstr(6, 0, "Created a new RRD file: "+rrdfile+"     ");
-        win.refresh();
-	rrdtool.create(rrdfile, "--step", str(step), "--start", str(offs),
-		"DS:"+dsname+":GAUGE:120:0:24000",
+        #win.addstr(7, 0, "Created a new RRD file: "+rrdfile+"     ");
+        #win.refresh();
+	try:
+		rrdtool.create(str(rrdf), "--step", str(step), "--start", str(offs),
+		"DS:"+str(dsname)+":GAUGE:120:0:24000",
                 "RRA:AVERAGE:0.5:1:864000",
                 "RRA:AVERAGE:0.5:60:129600",
                 "RRA:AVERAGE:0.5:3600:13392")
+	except Exception as e:
+        	win.addstr(7, 0, "Failed to create a new RRD file: "+rrdf+"     "+str(e));
+		win.insstr(9, 0, "                               ");
+        	win.refresh();
+		curses.endwin();
+		exit();
+		
 
 
 
-def fill_rrd_db(sqlitedb, query, rrdfile, offset):
-	conn = sqlite3.connect(sqlitedb);
+
+def fill_rrd_db(conn, query, rrdfile, offset):
+	#conn = sqlite3.connect(sqlitedb);
 	cur = conn.cursor();
-	win.addstr(1, 0, "hi");
+	win.addstr(1, 0, "  ");
 	win.refresh();
 	failures = 0;
 	qcounter = 0;
 	tim=0;
 	
-	cur.execute(query, [str(offset)]);
+	cur.execute(query);
 	for row in cur:
 		qcounter=qcounter+1;
 		tim=row[0];
@@ -60,29 +58,38 @@ def fill_rrd_db(sqlitedb, query, rrdfile, offset):
 		win.addstr(1, 20,  supp+"\t"+str(qcounter));
 		win.refresh();
 		try:
-			rrdtool.update(rrdfile, sup);
-		except:
+			rrdtool.update(str(rrdfile), sup);
+		except Exception as e:
 			failures=failures+1;
 			win.addstr(2, 0,  "failure "+str(failures)+" /"+supp);
+			win.addstr(10, 0, "ERR: "+str(e));
 
-def get_sqlite_offset(sqlitedb, table, ts='timestamp'):
-	conn = sqlite3.connect(sqlitedb);
+def get_sqlite_offset(conn, table, ts='timestamp'):
+	#conn = sqlite3.connect(sqlitedb);
 	cur  = conn.cursor();
-	cur.execute("SELECT * FROM "+table+" ORDER BY "+ts+" ASC LIMIT 1;");
-	offset=cur.fetchone()[0];
+	sqquery = "SELECT timestamp FROM "+str(table)+" ORDER BY timestamp ASC LIMIT 1;";
+	cur.execute(sqquery);
+	try:
+		offset=cur.fetchone()[0];
+	except:
+		print "Failed to get offset"+sqquery;
+		exit();
+		offset=-1;
 	return int(offset);
 
-def plot_table(tname):
+def plot_table(conn, tname):
     rrdf=rrdpath+"/"+tname+".rrd";
-    offs=get_sqlite_offset(sensorsdb, tname);
+    offs=get_sqlite_offset(conn, tname);
     printoff(offs)
+    if offs < 0:
+	return 0;
 
     wstr="   Start offset:"+printoff(offs)+" "+tname;
     win.addstr(1, 0, wstr);
     win.refresh();
-    create_db(tname, offs, 60);
-    sq_query = 'SELECT * from '+tname+' WHERE timestamp > ? ORDER BY timestamp';
-    fill_rrd_db(sensorsdb, sq_query, rrdf, offs)
+    create_rrd_db(tname, offs, 60);
+    sq_query = 'SELECT * from '+tname+' ORDER BY timestamp ASC';
+    fill_rrd_db(conn, sq_query, rrdf, offs)
 
 
 
@@ -94,8 +101,7 @@ def plot_table(tname):
 if len(sys.argv) > 1 :
 	cmd=sys.argv[1];
 else:
-	print "usage filldb.py [arg]"
-	sys.exit(64)
+	cmd= ""
 
 sensorsdb='/var/db/pigoda/sensorsv2.db'
 rrdpath="/var/db/pigoda/rrd/"
@@ -110,26 +116,23 @@ win.getkey();
 win.addstr(1, 0, "  Wait                         ");
 win.refresh();
 
-if cmd == "pir":
-    plot_table(cmd);
-elif cmd == "pressure":
-    plot_table(cmd);
-elif cmd == "light":
-    plot_table(cmd);
-elif cmd == "tempin":
-    plot_table(cmd);
-elif cmd == "tempout":
-    plot_table(cmd);
-elif cmd == "mic":
-    plot_table(cmd);
-elif cmd == "tempin_guerni":
-    plot_table(cmd);
-else:
-	win.addstr(0, 20, "unknown command "+cmd);
+try:
+	conn = sqlite3.connect(sensorsdb);
+except:
+	print "Failed to connect with DB"
+
+cur = conn.cursor();
+cur.execute("select tbl_name from sqlite_master;");
+for row in cur:
+	#sup=str(row[0])+":"+str(row[1]);
+	win.addstr(8, 0,  "Plotting "+row[0]);
+	plot_table(conn, row[0]);
 
 
 
-win.insstr(5, 10, "FINISHED!");
+
+
+win.insstr(15, 10, "FINISHED!");
 win.refresh();
 win.getkey();
 curses.endwin();
