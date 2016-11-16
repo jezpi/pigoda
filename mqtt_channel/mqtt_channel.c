@@ -68,6 +68,7 @@ typedef struct scr_stat {
 	float 	 ss_value;
 	unsigned long ss_err_sqlite;
 	unsigned long ss_store_sqlite;
+	time_t 	ss_lastupdate;
 	struct scr_stat *ss_next;
 } scr_stat_t;
 
@@ -104,6 +105,7 @@ scr_stat_new(struct mq_ch_screen *sd, const char *name, float value)
 	sp = calloc(1, sizeof(*sp)); /* TODO check if NULL */
 	sp->ss_name = strdup(name);
 	sp->ss_value = value;	
+	time(&sp->ss_lastupdate);
 
 	if (sd->screen_stats_head == NULL) {
 		sd->screen_stats_head = sd->screen_stats_tail = sp;
@@ -146,6 +148,7 @@ scr_stat_update(struct mq_ch_screen *sd, const char *name, float value)
 	do {
 		if (!strcasecmp(name, sp->ss_name)) {
 			sp->ss_value = value;
+			time(&sp->ss_lastupdate);
 			return (sp);
 		}
 		sp = sp->ss_next;
@@ -302,7 +305,7 @@ main(int argc, char **argv)
 			main_loop = false;
 			/*fprintf(stderr, "%s) got SIGTERM\n", __PROGNAME);*/
 			got_SIGTERM = 0;
-			MQTT_pub(mosq, "/network/broadcast/mqtt_channel", true, "off");
+			MQTT_pub(mosq, "/network/broadcast/mqtt_channel", true, "off"); /* XXX OBSOLETED*/
 		}
 		if (proc_command) {
 			proc_command = false;
@@ -558,6 +561,8 @@ my_message_callback(struct mosquitto *mosq, void *userdata, const struct mosquit
 	float light, tempin, tempout, pressure, humidity, pir;
 	char *dataf;
 	float val;
+	time_t curtim;
+
 
 	if (msg->payloadlen){
 		if ((dataf = mqtt_poli_proc_msg(msg->topic, msg->payload)) != NULL) {
@@ -568,12 +573,17 @@ my_message_callback(struct mosquitto *mosq, void *userdata, const struct mosquit
 			} else {
 				sp->ss_value = val;
 			}
-
-			if (MQTT_poli_store(sqlitedb, dataf, val) != 0) {
-				MQTT_log("Store failure\n");
-				sp->ss_err_sqlite++;
+			curtim = time(NULL);
+			if (sp->ss_lastupdate == curtim) {
+				MQTT_printf("Not updating. Duplicated data on %s\n", sp->ss_name);
 			} else {
-				sp->ss_store_sqlite++;
+				sp->ss_lastupdate = curtim;
+				if (MQTT_poli_store(sqlitedb, dataf, val) != 0) {
+					MQTT_log("Store failure\n");
+					sp->ss_err_sqlite++;
+				} else {
+					sp->ss_store_sqlite++;
+				}
 			}
 		}
 	} else {
@@ -936,6 +946,7 @@ update_screen_stats(struct mq_ch_screen *scr)
 {
 	scr_stat_t 	*sp;
 	int 			linecnt = 1;
+	time_t 		curtime;
 
 	mvwprintw(scr->win_stat, 0, 0, "------------- Live Stats ------>\n");
 
@@ -943,14 +954,16 @@ update_screen_stats(struct mq_ch_screen *scr)
 		mvwprintw(scr->win_stat, 1, 1, "              No Stats           \n");
 		return (-1);
 	}
-
-	mvwprintw(scr->win_stat, linecnt++, 1, "              %25s: %11s     fail/ok", "sensor name", "value");
+	time(&curtime);
+	mvwprintw(scr->win_stat, linecnt++, 1, "              %25s: %11s     fail/ok\tlastupdate", "sensor name", "value");
 	do {
-		mvwprintw(scr->win_stat, linecnt, 1, "              %25s: %11f     %4lu/%lu", 
+		mvwprintw(scr->win_stat, linecnt, 1, "              %25s: %11f     %4lu/%lu\t%2lu", 
 								sp->ss_name, 
 								sp->ss_value, 
 								sp->ss_err_sqlite,
-								sp->ss_store_sqlite);
+								sp->ss_store_sqlite,
+								(curtime-sp->ss_lastupdate)
+			 );
 		/* some ordering stuff */
 		linecnt++;
 		sp = sp->ss_next;
