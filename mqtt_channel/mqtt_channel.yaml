@@ -5,17 +5,19 @@
 pidfile: "/var/run/mqtt_channel.pid"
 logfile: "/var/log/mqtt_channel.log"
 debug: 4
-mqtt_host: "172.17.17.4"
+mqtt_host: "localhost"
 mqtt_port: 1883
-mqtt_user: "mqttch"
-mqtt_password: 'mqttchpass'
+mqtt_user: "mqtt_channel"
+mqtt_password: 'XXXXXXXX'
 mqtt_keepalive: 60
+sqlite3_db: "/var/db/pigoda/sensorsv2.db"
+identity: "mqtt_channel_laptop"
 # configuration of channels
 channels:
         - name: "/guernika/network/broadcast"
-          on_message: "./script.sh"
+          on_message: "store_sqlite3"
 
         - name:  "/guernika/environment/#"
-          on_message: nop
+          on_message: "drop"
 
 ...
