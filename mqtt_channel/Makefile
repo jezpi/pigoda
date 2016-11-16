@@ -6,14 +6,14 @@ TS=libthingspeak/src/thingspeak.o libthingspeak/src/ts_time.o libthingspeak/src/
 	
 
 
-mqtt_channel: mqtt_channel.o mqtt_parse_config.o mqttc_sqlite3.o 	
+mqtt_channel: mqtt_channel.o mqtt_parse_config.o mqtt_sqlite3.o
 	$(CC) -L/home/jez/code/lib/ $(CFLAGS) -o $@ $+  $(LDFLAGS)
 
 mqtt_channel.o: mqtt_channel.c
 	$(CC) $(DFLAGS) $(CFLAGS) -pipe -c $< 
 
 
-mqttc_sqlite3.o: mqttc_sqlite3.c
+mqtt_sqlite3.o: mqtt_sqlite3.c
 	$(CC) $(DFLAGS) $(CFLAGS) -pipe -c $< 
 
 mqtt_parse_config.o: mqtt_parse_config.c
