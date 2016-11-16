@@ -6,3 +6,5 @@
 : ${RRD_FILE_TEMPIN:="/var/db/pigoda/rrd/tempin.rrd"}
 : ${RRD_FILE_TEMPOUT:="/var/db/pigoda/rrd/tempout.rrd"}
 : ${RRD_GRAPH_PATH:="/var/www/pigoda"}
+: ${RRD_GRAPH_PATH:="/var/www/default/mq_graphs"}
+
