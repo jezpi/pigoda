@@ -167,7 +167,7 @@ main(int argc, char **argv)
 	}
 	pidfile_write(mr_pidfile);
 	if (myMQTT_conf.pool_sensors_delay == 0)
-		myMQTT_conf.pool_sensors_delay = 1055000;  /* defaults to 1 sec */
+		myMQTT_conf.pool_sensors_delay = 1000000;  /* defaults to 1 sec (which equals 1 000 000usecs*/
 
 	
 	if (0 && fork_mqtt_pir(&Mosquitto) <= 0) {
