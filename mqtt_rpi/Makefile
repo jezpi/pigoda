@@ -10,6 +10,9 @@ mqtt_rpi: mqtt_rpi.o mqtt_wiringpi.o mqtt_parse_config.o mqtt_sensors.o testBMP0
 mqtt_rpi.o: mqtt_rpi.c
 	$(CC) $(DFLAGS) $(CFLAGS) -pipe -c $< 
 
+alsa_mic_mqtt.o: alsa_mic_mqtt.c
+	$(CC) $(DFLAGS) $(CFLAGS) -pipe -c $< 
+
 mqtt_wiringpi.o: mqtt_wiringpi.c
 	$(CC) $(DFLAGS) $(CFLAGS) -pipe -c $< 
 
@@ -65,4 +68,9 @@ gdb: mqtt_rpi
 	gdb ./mqtt_rpi 
 
 debiandeps:
-	apt-get install  libyaml-dev sqlite3 libsqlite3-dev libbsd-dev wiringpi
+	apt-get install  libyaml-dev sqlite3 libsqlite3-dev libbsd-dev libmosquitto-dev wiringpi
+
+
+
+alsamicmqtt: alsa_mic_mqtt.o
+	$(CC)  $(CFLAGS) -o $@ $+  -lasound -lmosquitto
