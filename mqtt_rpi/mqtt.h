@@ -26,6 +26,7 @@ typedef struct sensors {
 typedef struct mqtt_global_config_t {
 	const char *pidfile;
 	const char *logfile;
+	char 		*identity;
 	short		daemon;
 	unsigned int debug_level;
 	const char *mqtt_host;
