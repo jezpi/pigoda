@@ -4,6 +4,27 @@
 dt=`date +%s`
 offs=$((dt-10800))
 
+graph_micguernilaptop () {
+	name=micguernilaptop
+	echo "=> Creating png graph - $name"
+	rrdtool graph ${RRD_GRAPH_PATH}/${name}.png \
+		-w 785 -h 120 -a PNG \
+		--slope-mode \
+		--start 'now-3h' --end 'now-60s' \
+		--font='DEFAULT:7:' \
+		--title="${name} sensor stats " \
+		--watermark="Date `date`" \
+		--lower-limit 0 \
+		--upper-limit 5000 \
+		--alt-y-grid \
+		--rigid \
+		DEF:uval=${RRD_DB_PATH}/${name}.rrd:${name}:AVERAGE \
+		VDEF:uvallast=uval,AVERAGE \
+		AREA:uval#0000FF:"values\n" \
+		LINE1:uvallast#FF00FF:"Last value\n":dashes \
+		GPRINT:uval:AVERAGE:"Avg\: %5.2lf\n" 
+
+}
 
 graph_unknown () {
 	name=$1
