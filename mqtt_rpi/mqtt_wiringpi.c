@@ -21,16 +21,33 @@
 #include <stdio.h>
 
 #include <wiringPi.h>
+#include "mqtt.h"
 #include "mqtt_wiringpi.h"
+#define FAN_PIN 1
 
 static const unsigned short red_led_pin = 0;
 static const unsigned short green_led_pin = 2;
+
+int
+leds_setup(ledset_t *ls)
+{
+	led_t *lp;
+
+	lp = ls->ls_head;
+	do {
+		pinMode(lp->l_pin, OUTPUT);
+		lp = lp->l_next;
+	} while (lp != ls->ls_head && lp != NULL);
+	/*red_led_pin */
+
+}
 
 int 
 startup_led_act(int ledticks, int blink_delay) 
 {
 	int n = 0;
 	short ticktack = 1;
+
 	pinMode(green_led_pin, OUTPUT);
 	pinMode(red_led_pin, OUTPUT);
 	digitalWrite(green_led_pin, HIGH);
@@ -54,7 +71,7 @@ startup_led_act(int ledticks, int blink_delay)
 	digitalWrite(red_led_pin, LOW);
 	digitalWrite(green_led_pin, LOW);
 }
-#define FAN_PIN 1
+
 int startup_fanctl()
 {
 	int n = 0;
