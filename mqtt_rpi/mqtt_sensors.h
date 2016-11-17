@@ -5,10 +5,6 @@
 #ifndef _MQTT_SENSORS_H_
 #define  _MQTT_SENSORS_H_
 
-struct sensor_set {
-	int 	pcf_8591_pin_base;
-	struct mq_sensor 	*s_first;
-};
 #define PIN_BASE 220
 extern int sensors_init(sensors_t *);
 extern float pcf8591p_ain(char *);

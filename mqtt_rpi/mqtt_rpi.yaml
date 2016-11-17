@@ -33,4 +33,12 @@ sensors:
           address: "0x48"
           config: "0"
           channel: "/environment/light"
+leds:
+        - name: "green_led"
+          gpio_pin: 2
+          action: "failure"
+        - name: "red_led"
+          gpio_pin: 1
+          action: "notify"
+
 ...

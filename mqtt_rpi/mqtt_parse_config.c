@@ -11,6 +11,7 @@ unsigned short DEBUG_FLAG;
 #define ddprintf if (DEBUG_FLAG>0x4) printf
 #endif
 typedef enum {DEBUG_BASE=0x1, DEBUG_FUNC=0x2} debug_type_t;
+FILE *debuglog;
 /*
 typedef struct mqtt_global_config_t {
 	const char *pidfile;
@@ -22,6 +23,17 @@ typedef struct mqtt_global_config_t {
 
 */
 
+
+ledset_t myleds;
+sensors_t sensors;
+mqtt_global_cfg_t myMQTT;
+
+enum {SCALAR_SSEQ, SCALAR_SMAP, SCALAR_MAIN} scalar_opts = SCALAR_MAIN;
+enum {V_UNKNOWN, V_PIDFILE, V_LOGFILE, V_DEBUG, V_SERVER, V_MQTTUSER, V_MQTTPASS, V_MQTTPORT, V_DAEMON, V_DELAY, V_IDENTITY} c_opts = V_UNKNOWN;
+enum {S_MODNAME, S_CHANNEL, S_MODULE, S_TYPE, S_CONFIG, S_VAR , S_ADDRESS, S_I2CTYPE, S_INIT} module_opts = S_INIT;
+enum {LED_NAME, LED_PIN, LED_ACTION, LED_VALUE, LED_INIT} led_opts = LED_VALUE;
+enum {BLK_MAIN, BLK_SENSORS, BLK_INPUT, BLK_LEDS} blk_opts = BLK_MAIN;
+static char *curvar;
 
 
 sensor_t *
@@ -57,19 +69,6 @@ sensor_find_by_name(sensors_t *snrs, const char *name)
 }
 
 
-sensors_t sensors;
-
-enum {SCALAR_SSEQ, SCALAR_SMAP, SCALAR_MAIN} scalar_opts = SCALAR_MAIN;
-
-mqtt_global_cfg_t myMQTT;
-
-static char *curvar;
-FILE *debuglog;
-enum {V_UNKNOWN, V_PIDFILE, V_LOGFILE, V_DEBUG, V_SERVER, V_MQTTUSER, V_MQTTPASS, V_MQTTPORT, V_DAEMON, V_DELAY, V_IDENTITY} c_opts = V_UNKNOWN;
-
-
-enum {S_MODNAME, S_CHANNEL, S_MODULE, S_TYPE, S_CONFIG, S_VAR , S_ADDRESS, S_I2CTYPE, S_INIT} module_opts = S_INIT;
-enum {BLK_MAIN, BLK_SENSORS, BLK_INPUT} blk_opts = BLK_MAIN;
 
 int
 proc_main_opt(char *scalar_value)
@@ -243,6 +242,55 @@ proc_sensors_opt(char *scalar_value)
 	return (0);
 }
 
+led_t *
+new_led(ledset_t *ls, char *name)
+{
+	led_t *lp = NULL;
+
+	lp = calloc(1, sizeof(*lp));
+	lp->l_name = strdup(name);
+	if (ls->ls_head == NULL) {
+		ls->ls_tail = ls->ls_head = lp;
+	} else {
+		ls->ls_tail->l_next = lp;
+		ls->ls_tail = lp;
+	}
+	return (lp);
+}
+
+
+
+static int
+proc_leds_opt(char *scalar_value) {
+	if (!strcasecmp(scalar_value, "name")) {
+		led_opts = LED_NAME;
+	} else if (!strcasecmp(scalar_value, "gpio_pin")) {
+		led_opts = LED_PIN;
+	} else if (!strcasecmp(scalar_value, "action")) {
+		led_opts = LED_ACTION;
+	} else {
+		switch(led_opts) {
+			case LED_NAME:
+				curled = new_led(&myleds, scalar_value);
+				break;
+			case LED_PIN:
+				curled->l_pin = atoi(scalar_value);
+				break;
+			case LED_ACTION:
+				if (!strcasecmp(scalar_value, "failure")) {
+					curled->l_action = LED_FAILURE;
+				}  else if (!strcasecmp(scalar_value, "notify")) {
+					curled->l_action = LED_NOTIFY;
+				}  else  {
+					dprintf("invalid led action");
+					return (-1);
+				}
+
+				break;
+		}
+	}
+	return (0);
+}
 
 static int yaml_assign_scalar(yaml_event_t *t)
 {
@@ -254,6 +302,11 @@ static int yaml_assign_scalar(yaml_event_t *t)
 		case BLK_SENSORS:
 			if (proc_sensors_opt(t->data.scalar.value) < 0)
 				return (-1);
+			break;
+		case BLK_LEDS:
+			if (proc_leds_opt(t->data.scalar.value) < 0) {
+				return (-1);
+			}
 			break;
 	}
 
@@ -326,10 +379,11 @@ parse_configfile(const char *path, mqtt_global_cfg_t *myconfig)
 				}
 				break;
 			case YAML_MAPPING_START_EVENT:  
-				dprintf("%sS-MAP START %s:%s@sensors\n", 
+				dprintf("%sS-MAP START %s:%s@%d\n", 
 						tabbuf,
 						event.data.mapping_start.tag, 
-						event.data.mapping_start.anchor
+						event.data.mapping_start.anchor,
+						blk_opts
 						); 
 
 				module_opts = S_INIT;
@@ -355,6 +409,9 @@ parse_configfile(const char *path, mqtt_global_cfg_t *myconfig)
 				if (!strncasecmp(last_scalar, "sensor", 6)) {
 					dprintf("%s SENSOR CONFIG\n",tabbuf);
 					blk_opts = BLK_SENSORS;
+				} else if (!strncasecmp(last_scalar, "leds", 4)) {
+					dprintf("%s LEDS CONFIG\n",tabbuf);
+					blk_opts = BLK_LEDS;
 				}
 				/*  new_block(last_scalar); */
 				break;
@@ -381,6 +438,7 @@ parse_configfile(const char *path, mqtt_global_cfg_t *myconfig)
 	yaml_parser_delete(&parser);
 	
 	myMQTT.sensors = &sensors;
+	myMQTT.leds = &myleds;
 	if (myconfig != NULL) 
 		bcopy(&myMQTT, myconfig, sizeof(myMQTT));
 
