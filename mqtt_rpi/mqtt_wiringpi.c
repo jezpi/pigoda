@@ -26,7 +26,6 @@
 #include "mqtt_wiringpi.h"
 
 /* XXX */
-#define FAN_PIN 1
 
 /*typedef static const signed short pin_t;*/
 /*static const signed short failure_led_pin = 0;
@@ -47,7 +46,7 @@ gpios_setup(gpios_t *gp_set)
 	if (gp_set == NULL) 
 		return (-1);
 
-	if ((gp = gp_set->gpios_head) != NULL) {
+	if ((gp = gp_set->gpios_head) == NULL) {
 		return (-1);
 	}
 	do {
@@ -118,8 +117,8 @@ int startup_fanctl()
 	
 	if (tip120_gpio == NULL)
 		return (-1);
-	pinMode(FAN_PIN, PWM_OUTPUT);
-	pwmWrite(FAN_PIN, 100);
+	pinMode(tip120_gpio->g_pin, PWM_OUTPUT);
+	pwmWrite(tip120_gpio->g_pin, 100);
 }
 
 
@@ -136,12 +135,18 @@ term_led_act(short failure)
 int
 flash_led(short ledid, int act) {
 	int ret = 0;
-	return (-1); /* inmediate return, we don't use this */
+
 	switch(ledid) {
 		case FAILURE_LED:
+			if (failure_gpio == NULL) {
+				return (-1);
+			}
 			digitalWrite(failure_gpio->g_pin, act);
 			break;
 		case NOTIFY_LED:
+			if (notify_gpio == NULL) {
+				return (-1);
+			}
 			digitalWrite(notify_gpio->g_pin, act);
 			break;
 		default:
@@ -153,16 +158,18 @@ flash_led(short ledid, int act) {
 int
 fanctl(short act, int *args) 
 {
-	return (-1);/* XXX we don't use this right now */
-	pinMode(FAN_PIN, PWM_OUTPUT);
+	if (tip120_gpio == NULL) {
+		return (-1);
+	}
+	pinMode(tip120_gpio->g_pin, PWM_OUTPUT);
 	int ret = 0;
 	switch(act) {
 		case FAN_ON:
-			fprintf(stderr, "putting HIGH %d\n", FAN_PIN);
-			pwmWrite(FAN_PIN, 1024);
+			fprintf(stderr, "putting HIGH %d\n", tip120_gpio->g_pin);
+			pwmWrite(tip120_gpio->g_pin, 1024);
 			break;
 		case FAN_OFF:
-			pwmWrite(FAN_PIN, 0);
+			pwmWrite(tip120_gpio->g_pin, 0);
 			break;
 		default:
 			ret = -1;
