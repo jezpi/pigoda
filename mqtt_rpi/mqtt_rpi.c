@@ -24,6 +24,7 @@
 #include <bsd/libutil.h> /* pidfile_open(3) etc. */
 #include <wiringPi.h> /* defs of HIGH and LOW */
 
+#include "mqtt_parser.h"
 #include "mqtt.h"
 #include "mqtt_sensors.h"
 #include "mqtt_wiringpi.h"

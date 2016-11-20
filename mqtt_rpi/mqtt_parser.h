@@ -1,4 +1,3 @@
-
 #ifndef _MQTT_PARSER_H_
 #define  _MQTT_PARSER_H_
 typedef enum {SENS_W1, SENS_I2C, SENS_DHTXX} stype_t;   
@@ -7,9 +6,9 @@ typedef enum {G_LED_FAILURE, G_LED_NOTIFY, G_PWR_BTN, G_RESERVED} gpio_type_t;
 
 typedef struct gpio {
 	char 		*g_name;
-	int 		g_pin; 
-	gpio_type_t  	g_type;
-	struct gpio *g_next;
+	int 		 g_pin; 
+	gpio_type_t  	 g_type;
+	struct gpio 	*g_next;
 } gpio_t;
 
 
