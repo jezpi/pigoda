@@ -1,10 +1,14 @@
 #ifndef _MQTT_WIRINGPI_H_
 #define  _MQTT_WIRINGPI_H_
 
-#define RED_LED 0x1
-#define GREEN_LED 0x2
+#define FAILURE_LED 0x1
+#define NOTIFY_LED 0x2
 #define FAN_ON 0x1
 #define FAN_OFF 0x2
+
+
+extern int gpios_setup(gpios_t *);
+
 extern int startup_fanctl();
 extern int fanctl(short, int *);
 extern int startup_led_act(int, int);
