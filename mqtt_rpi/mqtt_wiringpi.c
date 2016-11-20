@@ -21,14 +21,14 @@
 #include <stdio.h>
 
 #include <wiringPi.h>
+#include "mqtt_parser.h"
 #include "mqtt.h"
 #include "mqtt_wiringpi.h"
-#include "mqtt_parser.h"
 
 /* XXX */
 #define FAN_PIN 1
 
-typedef static const signed short pin_t;
+/*typedef static const signed short pin_t;*/
 /*static const signed short failure_led_pin = 0;
 static const signed short notify_led_pin = 2;*/
 
@@ -44,8 +44,12 @@ gpios_setup(gpios_t *gp_set)
 {
 	gpio_t *gp;
 	int 	cnt=0;
+	if (gp_set == NULL) 
+		return (-1);
 
-	gp = gp_set->gpios_head;
+	if ((gp = gp_set->gpios_head) != NULL) {
+		return (-1);
+	}
 	do {
 		if (gp != NULL) {
 			switch(gp->g_type) {
@@ -65,7 +69,7 @@ gpios_setup(gpios_t *gp_set)
 			}
 		}
 		gp = gp->g_next;
-	} while (gp != gpios->gpios_head && gp != NULL);
+	} while (gp != gp_set->gpios_head && gp != NULL);
 	/*failure_led_pin */
 	
 	return (cnt);
@@ -76,7 +80,7 @@ startup_led_act(int ledticks, int blink_delay)
 {
 	int n = 0;
 	short ticktack = 1;
-	pin_t failure_pin, notify_pin;
+	short failure_pin, notify_pin;
 
 	if (notify_gpio == NULL || failure_gpio == NULL) {
 		return (0);
