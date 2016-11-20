@@ -113,7 +113,7 @@ static int set_logging(mqtt_global_cfg_t *myconf);
 static void sig_hnd(int);
 
 static void usage(void);
-void shutdown_linux(void);
+static void shutdown_linux(void);
 
 static int pool_sensors(struct mosquitto *mosq);
 static int fork_mqtt_pir(mqtt_hnd_t *);
@@ -270,6 +270,7 @@ main(int argc, char **argv)
 			flash_led(NOTIFY_LED, LOW);
 		}
 		if (poll_pwr_btn() > 0) {
+			flash_led(FAILURE_LED, HIGH);
 			main_loop = false;
 			shutdown_rpi = true;
 			MQTT_printf("Shutdown\n");
@@ -888,7 +889,7 @@ MQTT_printf(const char *fmt, ...)
 	return (ret);
 }
 
-void 
+static void 
 shutdown_linux(void)
 {
 	switch(fork()) {
