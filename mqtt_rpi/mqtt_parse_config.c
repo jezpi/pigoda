@@ -1,7 +1,7 @@
 #include <stdio.h>
 
 #include <yaml.h>
-#include "mqtt.h"
+#include "mqtt_parser.h"
 
 #ifdef DEBUG
 
@@ -23,16 +23,17 @@ typedef struct mqtt_global_config_t {
 
 */
 
+gpio_t 	*curgpio;
 
-ledset_t myleds;
+gpios_t myGPIOs;
 sensors_t sensors;
 mqtt_global_cfg_t myMQTT;
 
 enum {SCALAR_SSEQ, SCALAR_SMAP, SCALAR_MAIN} scalar_opts = SCALAR_MAIN;
 enum {V_UNKNOWN, V_PIDFILE, V_LOGFILE, V_DEBUG, V_SERVER, V_MQTTUSER, V_MQTTPASS, V_MQTTPORT, V_DAEMON, V_DELAY, V_IDENTITY} c_opts = V_UNKNOWN;
 enum {S_MODNAME, S_CHANNEL, S_MODULE, S_TYPE, S_CONFIG, S_VAR , S_ADDRESS, S_I2CTYPE, S_INIT} module_opts = S_INIT;
-enum {LED_NAME, LED_PIN, LED_ACTION, LED_VALUE, LED_INIT} led_opts = LED_VALUE;
-enum {BLK_MAIN, BLK_SENSORS, BLK_INPUT, BLK_LEDS} blk_opts = BLK_MAIN;
+enum {GPIO_NAME, GPIO_PIN, GPIO_FUNCTION, GPIO_TYPE, GPIO_VALUE, GPIO_INIT} gpio_opts = GPIO_VALUE;
+enum {BLK_MAIN, BLK_SENSORS, BLK_INPUT, BLK_GPIOS} blk_opts = BLK_MAIN;
 static char *curvar;
 
 
@@ -242,20 +243,39 @@ proc_sensors_opt(char *scalar_value)
 	return (0);
 }
 
-led_t *
-new_led(ledset_t *ls, char *name)
+gpio_t *
+new_gpio(gpios_t *gp_set, char *name)
 {
-	led_t *lp = NULL;
+	gpio_t *gp = NULL;
 
-	lp = calloc(1, sizeof(*lp));
-	lp->l_name = strdup(name);
-	if (ls->ls_head == NULL) {
-		ls->ls_tail = ls->ls_head = lp;
+	gp = calloc(1, sizeof(*gp));
+	gp->g_name = strdup(name);
+	if (gp_set->gpios_head == NULL) {
+		gp_set->gpios_tail = gp_set->gpios_head = gp;
 	} else {
-		ls->ls_tail->l_next = lp;
-		ls->ls_tail = lp;
+		gp_set->gpios_tail->g_next = gp;
+		gp_set->gpios_tail = gp;
 	}
-	return (lp);
+	return (gp);
+}
+
+gpio_t *
+gpiopin_by_type(gpios_t *gp_set, gpio_type_t gtype, char *name)
+{
+	gpio_t 	*gp,*ret = NULL;
+
+	if (gp_set == NULL || gp_set->gpios_head == NULL) {
+		return (NULL);
+	}
+
+	gp = gp_set->gpios_head;
+	do {
+		if (gtype == gp->g_type) {
+			ret = gp;
+		}
+		gp = gp->g_next;
+	} while (gp != gp_set->gpios_head && gp != NULL);
+	return (ret);
 }
 
 
@@ -263,36 +283,40 @@ new_led(ledset_t *ls, char *name)
 static int
 proc_leds_opt(char *scalar_value) {
 	if (!strcasecmp(scalar_value, "name")) {
-		led_opts = LED_NAME;
+		gpio_opts = GPIO_NAME;
 	} else if (!strcasecmp(scalar_value, "gpio_pin")) {
-		led_opts = LED_PIN;
-	} else if (!strcasecmp(scalar_value, "action")) {
-		led_opts = LED_ACTION;
+		gpio_opts = GPIO_PIN;
+	} else if (!strcasecmp(scalar_value, "type")) {
+		gpio_opts = GPIO_TYPE;
 	} else {
-		switch(led_opts) {
-			case LED_NAME:
-				curled = new_led(&myleds, scalar_value);
+		switch(gpio_opts) {
+			case GPIO_NAME:
+				curgpio = new_gpio(&myGPIOs, scalar_value);
 				break;
-			case LED_PIN:
-				curled->l_pin = atoi(scalar_value);
+			case GPIO_PIN:
+				curgpio->g_pin = atoi(scalar_value);
 				break;
-			case LED_ACTION:
+			case GPIO_TYPE:
 				if (!strcasecmp(scalar_value, "failure")) {
-					curled->l_action = LED_FAILURE;
+					curgpio->g_type = G_LED_FAILURE;
 				}  else if (!strcasecmp(scalar_value, "notify")) {
-					curled->l_action = LED_NOTIFY;
+					curgpio->g_type = G_LED_NOTIFY;
+				}  else if (!strcasecmp(scalar_value, "pwr_btn")) {
+					curgpio->g_type = G_PWR_BTN;
+				}  else if (!strcasecmp(scalar_value, "reserved")) {
+					curgpio->g_type = G_RESERVED;
 				}  else  {
-					dprintf("invalid led action");
+					dprintf("invalid led action %s", scalar_value);
 					return (-1);
 				}
-
 				break;
 		}
 	}
 	return (0);
 }
 
-static int yaml_assign_scalar(yaml_event_t *t)
+static int 
+yaml_assign_scalar(yaml_event_t *t)
 {
 
 	switch(blk_opts) {
@@ -303,7 +327,7 @@ static int yaml_assign_scalar(yaml_event_t *t)
 			if (proc_sensors_opt(t->data.scalar.value) < 0)
 				return (-1);
 			break;
-		case BLK_LEDS:
+		case BLK_GPIOS:
 			if (proc_leds_opt(t->data.scalar.value) < 0) {
 				return (-1);
 			}
@@ -409,9 +433,9 @@ parse_configfile(const char *path, mqtt_global_cfg_t *myconfig)
 				if (!strncasecmp(last_scalar, "sensor", 6)) {
 					dprintf("%s SENSOR CONFIG\n",tabbuf);
 					blk_opts = BLK_SENSORS;
-				} else if (!strncasecmp(last_scalar, "leds", 4)) {
-					dprintf("%s LEDS CONFIG\n",tabbuf);
-					blk_opts = BLK_LEDS;
+				} else if (!strncasecmp(last_scalar, "gpio", 4)) {
+					dprintf("%s GPIOs CONFIG\n",tabbuf);
+					blk_opts = BLK_GPIOS;
 				}
 				/*  new_block(last_scalar); */
 				break;
@@ -438,7 +462,7 @@ parse_configfile(const char *path, mqtt_global_cfg_t *myconfig)
 	yaml_parser_delete(&parser);
 	
 	myMQTT.sensors = &sensors;
-	myMQTT.leds = &myleds;
+	myMQTT.gpios = &myGPIOs;
 	if (myconfig != NULL) 
 		bcopy(&myMQTT, myconfig, sizeof(myMQTT));
 
