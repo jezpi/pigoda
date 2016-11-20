@@ -23,23 +23,52 @@
 #include <wiringPi.h>
 #include "mqtt.h"
 #include "mqtt_wiringpi.h"
+#include "mqtt_parser.h"
+
+/* XXX */
 #define FAN_PIN 1
 
-static const unsigned short red_led_pin = 0;
-static const unsigned short green_led_pin = 2;
+typedef static const signed short pin_t;
+/*static const signed short failure_led_pin = 0;
+static const signed short notify_led_pin = 2;*/
+
+gpio_t *failure_gpio;
+gpio_t *notify_gpio;
+gpio_t *pwr_btn_gpio;
+gpio_t *tip120_gpio;
+
+
 
 int
-leds_setup(ledset_t *ls)
+gpios_setup(gpios_t *gp_set)
 {
-	led_t *lp;
+	gpio_t *gp;
+	int 	cnt=0;
 
-	lp = ls->ls_head;
+	gp = gp_set->gpios_head;
 	do {
-		pinMode(lp->l_pin, OUTPUT);
-		lp = lp->l_next;
-	} while (lp != ls->ls_head && lp != NULL);
-	/*red_led_pin */
-
+		if (gp != NULL) {
+			switch(gp->g_type) {
+				case G_PWR_BTN:
+					pinMode(gp->g_pin, INPUT);
+					pwr_btn_gpio = gp;
+				break;
+				case G_LED_FAILURE:
+					failure_gpio = gp;
+					pinMode(gp->g_pin, OUTPUT);
+				break;
+				case G_LED_NOTIFY:
+					notify_gpio = gp;
+					pinMode(gp->g_pin, OUTPUT);
+				break;
+					
+			}
+		}
+		gp = gp->g_next;
+	} while (gp != gpios->gpios_head && gp != NULL);
+	/*failure_led_pin */
+	
+	return (cnt);
 }
 
 int 
@@ -47,34 +76,44 @@ startup_led_act(int ledticks, int blink_delay)
 {
 	int n = 0;
 	short ticktack = 1;
+	pin_t failure_pin, notify_pin;
 
-	pinMode(green_led_pin, OUTPUT);
-	pinMode(red_led_pin, OUTPUT);
-	digitalWrite(green_led_pin, HIGH);
-	digitalWrite(red_led_pin, HIGH);
+	if (notify_gpio == NULL || failure_gpio == NULL) {
+		return (0);
+	}
+	notify_pin = notify_gpio->g_pin;
+	failure_pin = failure_gpio->g_pin;
+
+	digitalWrite(notify_pin, HIGH);
+	digitalWrite(failure_pin, HIGH);
+
+
 	for (n = 0; n < ledticks; n++ ) {
 		if (ticktack) { 
-			digitalWrite(green_led_pin, LOW);
+			digitalWrite(notify_pin, LOW);
 			delay(blink_delay*3);
-			digitalWrite(green_led_pin, HIGH);
+			digitalWrite(notify_pin, HIGH);
 			delay(blink_delay);
 			ticktack = 0;
 		} else {
-			digitalWrite(0, LOW);
+			digitalWrite(failure_pin, LOW);
 			delay(blink_delay*3);
-			digitalWrite(0, HIGH);
+			digitalWrite(failure_pin, HIGH);
 			delay(blink_delay);
 			ticktack = 1;
 		}
 
 	}
-	digitalWrite(red_led_pin, LOW);
-	digitalWrite(green_led_pin, LOW);
+	digitalWrite(failure_pin, LOW);
+	digitalWrite(notify_pin, LOW);
 }
 
 int startup_fanctl()
 {
 	int n = 0;
+	
+	if (tip120_gpio == NULL)
+		return (-1);
 	pinMode(FAN_PIN, PWM_OUTPUT);
 	pwmWrite(FAN_PIN, 100);
 }
@@ -83,20 +122,23 @@ int startup_fanctl()
 int 
 term_led_act(short failure) 
 {
-	digitalWrite(green_led_pin, LOW);
-	if (failure)
-		digitalWrite(red_led_pin, HIGH);
+
+	if (notify_gpio != NULL)
+		digitalWrite(notify_gpio->g_pin, LOW);
+	if (failure && failure_gpio != NULL)
+		digitalWrite(failure_gpio->g_pin, HIGH);
 }
 
 int
 flash_led(short ledid, int act) {
 	int ret = 0;
+	return (-1); /* inmediate return, we don't use this */
 	switch(ledid) {
-		case RED_LED:
-			digitalWrite(red_led_pin, act);
+		case FAILURE_LED:
+			digitalWrite(failure_gpio->g_pin, act);
 			break;
-		case GREEN_LED:
-			digitalWrite(green_led_pin, act);
+		case NOTIFY_LED:
+			digitalWrite(notify_gpio->g_pin, act);
 			break;
 		default:
 			ret = -1;
@@ -107,6 +149,7 @@ flash_led(short ledid, int act) {
 int
 fanctl(short act, int *args) 
 {
+	return (-1);/* XXX we don't use this right now */
 	pinMode(FAN_PIN, PWM_OUTPUT);
 	int ret = 0;
 	switch(act) {
