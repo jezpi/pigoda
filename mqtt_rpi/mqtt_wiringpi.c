@@ -176,3 +176,27 @@ fanctl(short act, int *args)
 	}
 	return (ret);
 }
+
+extern int MQTT_printf(const char *, ...);
+
+int
+poll_pwr_btn()
+{
+	int 	val;
+	int 	ret = 0;
+
+	if (pwr_btn_gpio == NULL) {
+		return (0);
+	}
+	val = digitalRead(pwr_btn_gpio->g_pin);
+
+	switch(val) {
+		case HIGH:
+			ret = 0;
+			break;
+		case LOW:
+			ret = 1;
+			break;
+	}
+	return (ret);
+}
