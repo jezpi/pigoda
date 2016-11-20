@@ -170,15 +170,17 @@ main(int argc, char **argv)
 		myMQTT_conf.pool_sensors_delay = 1000000;  /* defaults to 1 sec (which equals 1 000 000usecs*/
 
 	
-	if (0 && fork_mqtt_pir(&Mosquitto) <= 0) {
+	if (0 && fork_mqtt_pir(&Mosquitto) <= 0) { /* ugly hack */
 		MQTT_log("Fork failed!");
 		/* ...
 		 * exit() 
 		 */
 	}
 
+	gpios_setup(myMQTT_conf.gpios);
+
 	MQTT_log("Sensors init");
-	sensors_init(myMQTT_conf.sensors); /* wiringPiSetup() */
+	sensors_init(myMQTT_conf.sensors); /* wiringPiSetup() bmp85() */
 	MQTT_log("Led act init");
 	startup_led_act(10, 100); /*  XXX ugly hack with magic number.
 				 It has a magic number which is just to wait until
@@ -187,6 +189,7 @@ main(int argc, char **argv)
 				 so critical. It is obviously relative and a workaround.
 				 */
 	startup_fanctl();
+
 	if ((mosq = MQTT_init(&Mosquitto, false, (myMQTT_conf.identity == NULL?__PROGNAME:myMQTT_conf.identity))) == NULL) {
 		fprintf(stderr, "%s: failed to init MQTT protocol \n", __PROGNAME);
 		MQTT_log("%s: failed to init MQTT protocol \n", __PROGNAME);
@@ -255,13 +258,13 @@ main(int argc, char **argv)
 			MQTT_pub(mosq, "/network/broadcast", false, "%lu", Mosquitto.mqh_start_time);
 		}
 		if (do_pool_sensors) {
-			flash_led(GREEN_LED, HIGH);
+			flash_led(NOTIFY_LED, HIGH);
 			if (pool_sensors(mosq) == -1) {
-				flash_led(RED_LED, HIGH);
+				flash_led(FAILURE_LED, HIGH);
 				do_pool_sensors = false;
 				MQTT_log("failed to pool sensors. Pooling disabled\n");
 			}
-			flash_led(GREEN_LED, LOW);
+			flash_led(NOTIFY_LED, LOW);
 		}
 		
 	  	usleep(myMQTT_conf.pool_sensors_delay);
