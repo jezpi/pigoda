@@ -85,6 +85,7 @@ static bool mqtt_publish_log = false;
 static struct pidfh *mr_pidfile;
 static bool main_loop;
 static bool mqtt_conn_dead = false;
+static bool shutdown_rpi = false;
 static sig_atomic_t unknown_signal;
 static sig_atomic_t got_SIGUSR1;
 static sig_atomic_t got_SIGTERM;
@@ -103,8 +104,8 @@ static struct mosquitto * MQTT_init(mqtt_hnd_t *, bool, const char *) ;
 static int MQTT_loop(void *m, int);
 static int  MQTT_pub(struct mosquitto *mosq, const char *topic, bool, const char *, ...);
 static int MQTT_sub(struct  mosquitto *m, const char *topic_fmt, ...);
-static int MQTT_printf(const char *, ...);
-static int MQTT_log(const char *, ...);
+int MQTT_printf(const char *, ...);
+int MQTT_log(const char *, ...);
 static void MQTT_finish(mqtt_hnd_t *);
 
 mqtt_cmd_t mqtt_proc_msg(char *, char *);
@@ -112,6 +113,7 @@ static int set_logging(mqtt_global_cfg_t *myconf);
 static void sig_hnd(int);
 
 static void usage(void);
+static void shutdown_linux(void);
 
 static int pool_sensors(struct mosquitto *mosq);
 static int fork_mqtt_pir(mqtt_hnd_t *);
@@ -267,7 +269,12 @@ main(int argc, char **argv)
 			}
 			flash_led(NOTIFY_LED, LOW);
 		}
-		
+		if (poll_pwr_btn() > 0) {
+			flash_led(FAILURE_LED, HIGH);
+			main_loop = false;
+			shutdown_rpi = true;
+			MQTT_printf("Shutdown\n");
+		}
 	  	usleep(myMQTT_conf.pool_sensors_delay);
 	}
 
@@ -282,6 +289,9 @@ main(int argc, char **argv)
 	fclose(logfile);
 	fanctl(FAN_OFF, NULL);
 	term_led_act(failure);
+	if (shutdown_rpi) {
+		shutdown_linux();
+	}
 	return (0);
 }
 
@@ -817,7 +827,7 @@ siginfo(int signo, siginfo_t *info, void *context)
 	return ;
 }
 
-static int
+int
 MQTT_log(const char *fmt, ...)
 {
 	va_list vargs;
@@ -848,7 +858,7 @@ MQTT_log(const char *fmt, ...)
 	return (ret);
 }
 
-static int
+int
 MQTT_printf(const char *fmt, ...)
 {
 	va_list vargs;
@@ -878,6 +888,25 @@ MQTT_printf(const char *fmt, ...)
 #endif
 	return (ret);
 }
+
+static void 
+shutdown_linux(void)
+{
+	switch(fork()) {
+		case 0:
+			execlp("/sbin/halt", "/sbin/halt", "-p", NULL);
+			MQTT_printf("execlp error %s\n", strerror(errno));
+			exit(3);
+			break;
+		case -1:
+			
+			break;
+		default:
+			MQTT_printf("Executed halt command\n");
+	}
+	return;
+}
+
 static void
 usage(void)
 {
