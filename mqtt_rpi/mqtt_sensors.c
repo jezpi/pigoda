@@ -28,9 +28,12 @@
 #include <errno.h>
 #include <string.h>
 
+#include "mqtt_parser.h"
 #include "mqtt.h"
 #include "mqtt_sensors.h"
 #include "bmp85/bmp85.h"
+
+#define W1_DEVS_PATH "/sys/bus/w1/devices/"
 
 int 
 sensors_init(sensors_t *sn) 
@@ -38,6 +41,7 @@ sensors_init(sensors_t *sn)
 	sensor_t 	*sp;
 	char 		*endptr;
 	long 		i2caddress;
+	int 		scnf = 0;
 
 	wiringPiSetup();
 	sp = sn->sn_head;
@@ -56,9 +60,11 @@ sensors_init(sensors_t *sn)
 					default:
 						return (-1);
 				}
+				scnf++;
 			break;
 			case SENS_W1:
 				/* NOP */
+				scnf++;
 			break;
 			default:
 				return (-1);
@@ -68,7 +74,7 @@ sensors_init(sensors_t *sn)
 	} while (sp != NULL && sp != sn->sn_head);
 	
 
-
+	return (scnf);
 }
 
 float pcf8591p_ain(char *pinnum) {
@@ -82,7 +88,6 @@ float pcf8591p_ain(char *pinnum) {
 }
 
 
-#define W1_DEVS_PATH "/sys/bus/w1/devices/"
 
 static char *
 getraw(const char *devpath)
@@ -130,6 +135,7 @@ double
 get_pressure(void)
 {
 	struct bmp85 *dta;
+
 	dta = bmp85_getdata();
 	return (dta->pressure);
 }

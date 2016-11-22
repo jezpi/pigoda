@@ -36,13 +36,18 @@ gpio_t *notify_gpio;
 gpio_t *pwr_btn_gpio;
 gpio_t *tip120_gpio;
 
-
+/* returned values:
+ * 0 = no gpios configured
+ * -1 = software/hardware error
+ * > 0 = count of configured gpios returned
+ */
 
 int
 gpios_setup(gpios_t *gp_set)
 {
 	gpio_t *gp;
 	int 	cnt=0;
+
 	if (gp_set == NULL) 
 		return (-1);
 
@@ -55,16 +60,18 @@ gpios_setup(gpios_t *gp_set)
 				case G_PWR_BTN:
 					pinMode(gp->g_pin, INPUT);
 					pwr_btn_gpio = gp;
+					cnt++;
 				break;
 				case G_LED_FAILURE:
 					failure_gpio = gp;
 					pinMode(gp->g_pin, OUTPUT);
+					cnt++;
 				break;
 				case G_LED_NOTIFY:
 					notify_gpio = gp;
 					pinMode(gp->g_pin, OUTPUT);
+					cnt++;
 				break;
-					
 			}
 		}
 		gp = gp->g_next;
@@ -74,6 +81,10 @@ gpios_setup(gpios_t *gp_set)
 	return (cnt);
 }
 
+/* return values:
+ * -1 = failure
+ *  1 = ok
+ */
 int 
 startup_led_act(int ledticks, int blink_delay) 
 {
@@ -82,7 +93,7 @@ startup_led_act(int ledticks, int blink_delay)
 	short failure_pin, notify_pin;
 
 	if (notify_gpio == NULL || failure_gpio == NULL) {
-		return (0);
+		return (-1);
 	}
 	notify_pin = notify_gpio->g_pin;
 	failure_pin = failure_gpio->g_pin;
@@ -109,6 +120,7 @@ startup_led_act(int ledticks, int blink_delay)
 	}
 	digitalWrite(failure_pin, LOW);
 	digitalWrite(notify_pin, LOW);
+	return (1);
 }
 
 int startup_fanctl()
@@ -119,13 +131,13 @@ int startup_fanctl()
 		return (-1);
 	pinMode(tip120_gpio->g_pin, PWM_OUTPUT);
 	pwmWrite(tip120_gpio->g_pin, 100);
+	return (0);
 }
 
 
 int 
 term_led_act(short failure) 
 {
-
 	if (notify_gpio != NULL)
 		digitalWrite(notify_gpio->g_pin, LOW);
 	if (failure && failure_gpio != NULL)
