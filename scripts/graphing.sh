@@ -114,7 +114,7 @@ echo "=> Creating png graph - temperature inside in guerni"
 	rrdtool graph ${RRD_GRAPH_PATH}/tempin_weekly.png \
 		-w 785 -h 120 -a PNG \
 		--slope-mode \
-		--start 'now-3h' --end now \
+		--start 'now-14d' --end now \
 		--font='DEFAULT:7:' \
 		--title="Temperature inside - past 14 days" \
 		--watermark="Date `date`" \
@@ -317,9 +317,9 @@ rrdtool graph ${RRD_GRAPH_PATH}/pressure.png \
 --watermark="Date `date`" \
 --alt-y-grid \
 --rigid \
+DEF:pressure=${RRD_DB_PATH}/pressure.rrd:pressure:AVERAGE \
 VDEF:pressuremax=pressure,MAXIMUM \
 VDEF:pressuremin=pressure,MINIMUM \
-DEF:pressure=${RRD_DB_PATH}/pressure.rrd:pressure:AVERAGE \
 AREA:pressure#008008:"Pressure (hPa)" \
 LINE1:pressuremax#FF0000:"Pressure max (hPa)\n":dashes \
 LINE1:pressuremin#006680:"Pressure min (hPa)\n":dashes \
