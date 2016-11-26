@@ -180,18 +180,29 @@ main(int argc, char **argv)
 		 */
 	}
 
-	gpios_setup(myMQTT_conf.gpios);
 
 	MQTT_log("Sensors init");
-	sensors_init(myMQTT_conf.sensors); /* wiringPiSetup() bmp85() */
-	MQTT_log("Led act init");
-	startup_led_act(10, 100); /*  XXX ugly hack with magic number.
+	if (sensors_init(myMQTT_conf.sensors) <= 0) {
+		MQTT_log("No sensors configured properly");
+
+	}	/* wiringPiSetup() bmp85() */
+
+	if (gpios_setup(myMQTT_conf.gpios) > 0) {
+		MQTT_log("Led act init");
+		if (startup_led_act(10, 100) < 0) {
+			MQTT_log("startup blink failure. ");
+			
+		}
+		/*  XXX ugly hack with magic number.
 				 It has a magic number which is just to wait until
 				 the NIC settles up, it takes a while and i preassume
 				 that inmediate data acquisition after reboot is not
 				 so critical. It is obviously relative and a workaround.
 				 */
-	startup_fanctl();
+	}
+	if (startup_fanctl() == 0) {
+		MQTT_log("Startup of tip120");
+	}
 
 	if ((mosq = MQTT_init(&Mosquitto, false, (myMQTT_conf.identity == NULL?__PROGNAME:myMQTT_conf.identity))) == NULL) {
 		fprintf(stderr, "%s: failed to init MQTT protocol \n", __PROGNAME);
