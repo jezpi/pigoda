@@ -44,6 +44,7 @@ sensor_new(sensors_t *snrs, char *name)
 
 	snew = calloc(1, sizeof(sensor_t));
 	snew->s_name = strdup(name);
+	snew->s_st = SENS_INIT;
 	if (snrs->sn_head == NULL) {
 		snrs->sn_head = snrs->sn_tail = snew;
 	} else {

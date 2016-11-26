@@ -46,15 +46,25 @@ sensors_init(sensors_t *sn)
 	wiringPiSetup();
 	sp = sn->sn_head;
 	do {
+		if (sp->s_st != SENS_INIT || (sp->s_type == SENS_I2C && sn->sn_adc_configured > 0)) {
+			if (sn->sn_adc_configured > 0) {
+				sp->s_st = SENS_OK;
+			}
+			sp = sp->s_next;
+			continue;
+		}
 		switch(sp->s_type) {
 			case SENS_I2C:
 				switch(sp->s_i2ctype) {
 					case I2C_PCF8591P:
 						i2caddress = strtol(sp->s_address, &endptr, 16);
 						pcf8591Setup(PIN_BASE, i2caddress);
+						sp->s_st = SENS_OK;
+						sn->sn_adc_configured = 1;
 						break;
 					case I2C_BMP85:
 						bmp85_init();
+						sp->s_st = SENS_OK;
 						/* MQTT_log */
 						break;
 					default:
@@ -63,6 +73,7 @@ sensors_init(sensors_t *sn)
 				scnf++;
 			break;
 			case SENS_W1:
+				sp->s_st = SENS_OK;
 				/* NOP */
 				scnf++;
 			break;
