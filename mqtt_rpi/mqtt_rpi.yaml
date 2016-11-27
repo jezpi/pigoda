@@ -40,9 +40,9 @@ gpio:
         - name: "red_led"
           gpio_pin: 0
           type: "notify"
-        - name: "pir_sensor"
+        - name: "pir_case"
           gpio_pin: 6
-          type: "reserved"
+          type: "pir_sensor"
         - name: "power button"
           type: "pwr_btn"
           gpio_pin: 5
