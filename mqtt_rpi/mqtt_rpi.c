@@ -5,6 +5,7 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 
+#include <pthread.h>
 #include <err.h>
 #include <errno.h>
 #include <libgen.h>
@@ -52,6 +53,12 @@ struct router_stats {
 	char	*rs_rx_rate;
 };
 
+struct pir_config {
+	unsigned int	pir_pin;
+	unsigned int	pir_led_pin;
+	char		*pir_mqtt_topic;
+	struct mosquitto *pir_mosq_connection;
+};
 
 struct MQTT_statistics {
 	unsigned long	mqs_msgcnt;
@@ -91,7 +98,10 @@ static sig_atomic_t got_SIGUSR1;
 static sig_atomic_t got_SIGTERM;
 static sig_atomic_t got_SIGCHLD;
 static unsigned short failure;
+pthread_mutex_t mqtt_connection_mutex;
+static struct mosquitto *mqtt_connection;
 
+mqtt_cmd_t mqtt_proc_msg(char *, char *);
 
 static void my_publish_callback(struct mosquitto *, void *, int);
 static void my_subscribe_callback(struct mosquitto *, void *, int, int, const int *);
@@ -100,15 +110,19 @@ static void my_message_callback(struct mosquitto *, void *, const struct mosquit
 static void my_connect_callback(struct mosquitto *, void *, int);
 static void register_callbacks(struct mosquitto *);
 
+
 static struct mosquitto * MQTT_init(mqtt_hnd_t *, bool, const char *) ;
 static int MQTT_loop(void *m, int);
 static int  MQTT_pub(struct mosquitto *mosq, const char *topic, bool, const char *, ...);
 static int MQTT_sub(struct  mosquitto *m, const char *topic_fmt, ...);
+static struct mosquitto * MQTT_reconnect(struct mosquitto *m, int *ret);
+void *mqtt_pir_th_routine(void *);
+
 int MQTT_printf(const char *, ...);
 int MQTT_log(const char *, ...);
 static void MQTT_finish(mqtt_hnd_t *);
 
-mqtt_cmd_t mqtt_proc_msg(char *, char *);
+
 static int set_logging(mqtt_global_cfg_t *myconf);
 static void sig_hnd(int);
 
@@ -116,10 +130,11 @@ static void usage(void);
 static void shutdown_linux(void);
 
 static int pool_sensors(struct mosquitto *mosq);
-static int fork_mqtt_pir(mqtt_hnd_t *);
+int fork_mqtt_pir(struct pir_config *);
 static void siginfo(int signo, siginfo_t *info, void *context);
 static bool mqtt_rpi_init(const char *progname, char *conf);
-static struct mosquitto * MQTT_reconnect(struct mosquitto *m, int *ret);
+static bool enable_pir(mqtt_global_cfg_t *myconf);
+
 /*
  * Application used to collect and store information from various MQTT channels
  *
@@ -133,7 +148,6 @@ int
 main(int argc, char **argv)
 {
 	char *bufp;
-	struct mosquitto *mosq;
 	int mqloopret=0;
 	struct rlimit lim;
 	pid_t	procpid;
@@ -173,13 +187,6 @@ main(int argc, char **argv)
 		myMQTT_conf.pool_sensors_delay = 1000000;  /* defaults to 1 sec (which equals 1 000 000usecs*/
 
 	
-	if (0 && fork_mqtt_pir(&Mosquitto) <= 0) { /* ugly hack */
-		MQTT_log("Fork failed!");
-		/* ...
-		 * exit() 
-		 */
-	}
-
 
 	MQTT_log("Sensors init");
 	if (sensors_init(myMQTT_conf.sensors) <= 0) {
@@ -204,7 +211,7 @@ main(int argc, char **argv)
 		MQTT_log("Startup of tip120");
 	}
 
-	if ((mosq = MQTT_init(&Mosquitto, false, (myMQTT_conf.identity == NULL?__PROGNAME:myMQTT_conf.identity))) == NULL) {
+	if ((mqtt_connection = MQTT_init(&Mosquitto, false, (myMQTT_conf.identity == NULL?__PROGNAME:myMQTT_conf.identity))) == NULL) {
 		fprintf(stderr, "%s: failed to init MQTT protocol \n", __PROGNAME);
 		MQTT_log("%s: failed to init MQTT protocol \n", __PROGNAME);
 
@@ -215,6 +222,10 @@ main(int argc, char **argv)
 		exit(3);
 
 	}
+	if (enable_pir(&myMQTT_conf) == false) {
+		MQTT_log("Pir not enabled!");
+	} else 
+		MQTT_log("Pir activated!");
 	
 	MQTT_log("Subscribe to /%s/cmd/#", __HOSTNAME);
 	MQTT_sub(Mosquitto.mqh_mos, "/%s/cmd/#", __HOSTNAME);
@@ -225,7 +236,7 @@ main(int argc, char **argv)
 
 	while (main_loop) {
 		/* -1 = 1000ms /  0 = instant return */
-		while((mqloopret = MQTT_loop(mosq, 0)) != MOSQ_ERR_SUCCESS) {
+		while((mqloopret = MQTT_loop(mqtt_connection, 0)) != MOSQ_ERR_SUCCESS) {
 			if (mqloopret == MOSQ_ERR_CONN_LOST || mqloopret == MOSQ_ERR_NO_CONN) {
 				term_led_act(1);/* value 1 indicates failure */
 				break;
@@ -236,11 +247,11 @@ main(int argc, char **argv)
 					break;
 			}
 			if (first_run) {
-				MQTT_pub(mosq, "/network/broadcast/mqtt_rpi", true, "on");
+				MQTT_pub(mqtt_connection, "/network/broadcast/mqtt_rpi", true, "on");
 				first_run = false;
 			}
 			if (got_SIGUSR1) {
-				MQTT_pub(mosq, "/network/broadcast/mqtt_rpi/user", false, "user_signal");
+				MQTT_pub(mqtt_connection, "/network/broadcast/mqtt_rpi/user", false, "user_signal");
 				got_SIGUSR1 = 0;
 			}
 			if (got_SIGCHLD) {
@@ -251,7 +262,7 @@ main(int argc, char **argv)
 		}
 
 		if (mqtt_conn_dead) {
-			if (MQTT_reconnect(mosq, NULL) != NULL) {
+			if (MQTT_reconnect(mqtt_connection, NULL) != NULL) {
 				MQTT_log("Reconnect success!");
 				mqtt_conn_dead = false;
 				do_pool_sensors = true;
@@ -265,15 +276,15 @@ main(int argc, char **argv)
 			main_loop = false;
 			fprintf(stderr, "%s) got SIGTERM\n", __PROGNAME);
 			got_SIGTERM = 0;
-			MQTT_pub(mosq, "/network/broadcast/mqtt", true, "off");
+			MQTT_pub(mqtt_connection, "/network/broadcast/mqtt", true, "off");
 		}
 		if (proc_command) {
 			proc_command = false;
-			MQTT_pub(mosq, "/network/broadcast", false, "%lu", Mosquitto.mqh_start_time);
+			MQTT_pub(mqtt_connection, "/network/broadcast", false, "%lu", Mosquitto.mqh_start_time);
 		}
 		if (do_pool_sensors) {
 			flash_led(NOTIFY_LED, HIGH);
-			if (pool_sensors(mosq) == -1) {
+			if (pool_sensors(mqtt_connection) == -1) {
 				flash_led(FAILURE_LED, HIGH);
 				do_pool_sensors = false;
 				MQTT_log("failed to pool sensors. Pooling disabled\n");
@@ -288,7 +299,6 @@ main(int argc, char **argv)
 		}
 	  	usleep(myMQTT_conf.pool_sensors_delay);
 	}
-
 	MQTT_printf("End of work");
 	if (Mosquitto.mqh_mqttpir_pid > 0) {
 		kill(Mosquitto.mqh_mqttpir_pid, SIGTERM);
@@ -586,11 +596,15 @@ MQTT_init(mqtt_hnd_t *m, bool c_sess, const char *id)
 
 	register_callbacks(m->mqh_mos);
 
+	pthread_mutex_init(&mqtt_connection_mutex, NULL);
+	pthread_mutex_lock(&mqtt_connection_mutex);
 	if ((mosq_ret = mosquitto_connect(m->mqh_mos, myMQTT_conf.mqtt_host, myMQTT_conf.mqtt_port, 600)) == MOSQ_ERR_SUCCESS) {
+		pthread_mutex_unlock(&mqtt_connection_mutex);
 		return (m->mqh_mos);
 	} else {
 		MQTT_log( "MQTT connect failure! %d %s\n", mosq_ret, strerror(errno));
 	}
+
 	return (NULL);
 }
 
@@ -635,13 +649,15 @@ MQTT_pub(struct mosquitto *mosq, const char *topic, bool perm, const char *fmt, 
 	va_end(lst);
 	msglen = strlen(msgbuf);
 	/*mosquitto_publish(mosq, NULL, "/network/broadcast", 3, Mosquitto.mqh_msgbuf, 0, false);*/
+	pthread_mutex_lock(&mqtt_connection_mutex);
 	if ((pubret = mosquitto_publish(mosq, &mid, topic, msglen, msgbuf, 0, perm)) == MOSQ_ERR_SUCCESS) {
 		ret = mid;
 		MQTT_stat.mqs_last_pub_mid = mid;
 	} else {
-		MQTT_printf("Publish error on %s \n", mosquitto_strerror(pubret));
+		MQTT_printf("Publish error on %s :%s \n", topic, mosquitto_strerror(pubret));
 		ret = -1;
 	}
+	pthread_mutex_unlock(&mqtt_connection_mutex);
 	return (ret);
 }
 
@@ -657,10 +673,12 @@ MQTT_sub(struct mosquitto *m, const char *fmt_topic, ...)
 	vsnprintf(msgbuf, sizeof msgbuf, fmt_topic, lst);
 	va_end(lst);
 
+	pthread_mutex_lock(&mqtt_connection_mutex);
 	if ((ret = mosquitto_subscribe(m, &msgid, msgbuf, 0)) == MOSQ_ERR_SUCCESS)
 		ret = msgid;
 	else
 		ret = -1;
+	pthread_mutex_unlock(&mqtt_connection_mutex);
 	return (ret);
 
 }
@@ -717,12 +735,21 @@ mqtt_rpi_init(const char *progname, char *conf)
 /*
  * fork()/exec() an instance of mqttpir
  */
-static int 
-fork_mqtt_pir(mqtt_hnd_t *mqh)
+int 
+fork_mqtt_pir(struct pir_config *cnf)
 {
 	pid_t 	chpid;
+	pthread_t pir_thread;
 	int     wstatus;
 
+
+#ifdef PTHREAD_PIR
+	if (cnf != NULL) {
+		pthread_create(&pir_thread, NULL, mqtt_pir_th_routine, cnf);
+	} else {
+		chpid = -1;
+	}
+#else
 #define MQTT_PIR_PATH     "/home/jez/repos/pigoda/mqtt_rpi/mqttpir/mqttpir"
 	switch((chpid = fork())) {
 		case 0: /* XXX hardcoded path */
@@ -737,7 +764,50 @@ fork_mqtt_pir(mqtt_hnd_t *mqh)
 			MQTT_log("Forked mqttpir with pid=%d", chpid);
 			mqh->mqh_mqttpir_pid = chpid;
 	}
+#endif
 	return (chpid);
+}
+
+
+void *
+mqtt_pir_th_routine(void *pir_cnf)
+{
+	struct pir_config *cnf;
+	struct mosquitto *m;
+	int tick;
+	int positive;
+	bool actled = false;
+	int ledpin, pirpin, val;
+	
+
+	cnf = (struct pir_config *) pir_cnf;
+	m = cnf->pir_mosq_connection;
+	pirpin = cnf->pir_pin;
+	ledpin = cnf->pir_led_pin;
+	pinMode(cnf->pir_pin, INPUT);
+	pinMode(cnf->pir_led_pin, OUTPUT); /* Pin 0? */
+	digitalWrite(cnf->pir_led_pin, HIGH);
+
+	for (; ; ) {
+		for (tick = 0, positive=0; tick < 60; tick++) {
+			if ((val = digitalRead(pirpin)) == HIGH) {
+				positive++;
+				digitalWrite(ledpin, HIGH);
+				actled = true;
+			} else if (actled == true) {
+				digitalWrite(ledpin, LOW);
+			}
+			usleep(1000000);
+			if (actled == true) {
+				digitalWrite(ledpin, LOW);
+				actled = false;
+			}
+		}
+		MQTT_pub(m, cnf->pir_mqtt_topic, false, "%f", (float)positive/60);
+
+	}
+
+	return (NULL);
 }
 
 
@@ -781,6 +851,49 @@ pool_sensors(struct mosquitto *mosq)
 	} while (sp != myMQTT_conf.sensors->sn_head && sp != NULL);
 
 	return (ret);
+}
+
+/*
+ *
+ * struct pir_config {
+ *	unsigned int	pir_pin;
+ *	unsigned int	pir_led_pin;
+ *	char		*pir_mqtt_topic;
+ *	struct mosquitto *pir_mosq_connection;
+ * };
+ */
+
+static bool 
+enable_pir(mqtt_global_cfg_t *myconf)
+{
+	struct pir_config *pir;
+	gpio_t	*g;
+
+	if (myconf->gpios == NULL)  {
+		MQTT_printf("GPIOs not configured\n");
+		return (false);
+	}
+	if ((g = gpiopin_by_type(myconf->gpios, G_PIR_SENSOR, NULL)) == NULL) {
+		MQTT_printf("PIR_SENSOR configuration is missing\n");
+		return (false);
+	}
+	pir = malloc(sizeof(struct pir_config));
+	pir->pir_pin = g->g_pin;
+	if (g->g_topic == NULL) {
+		MQTT_printf("You must specify a topic to publish in\n");
+		return (false);
+	}
+	pir->pir_mqtt_topic = strdup(g->g_topic);
+	pir->pir_mosq_connection = mqtt_connection;
+
+	if ((g = gpiopin_by_type(myconf->gpios, G_LED_FAILURE, NULL)) == NULL) {
+		MQTT_printf("G_LED_FAILURE not configured\n");
+		return (false);
+	}
+	pir->pir_led_pin = g->g_pin;
+	fork_mqtt_pir(pir);
+	return (true);
+	
 }
 
 
