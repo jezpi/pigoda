@@ -32,7 +32,7 @@ mqtt_global_cfg_t myMQTT;
 enum {SCALAR_SSEQ, SCALAR_SMAP, SCALAR_MAIN} scalar_opts = SCALAR_MAIN;
 enum {V_UNKNOWN, V_PIDFILE, V_LOGFILE, V_DEBUG, V_SERVER, V_MQTTUSER, V_MQTTPASS, V_MQTTPORT, V_DAEMON, V_DELAY, V_IDENTITY} c_opts = V_UNKNOWN;
 enum {S_MODNAME, S_CHANNEL, S_MODULE, S_TYPE, S_CONFIG, S_VAR , S_ADDRESS, S_I2CTYPE, S_INIT} module_opts = S_INIT;
-enum {GPIO_NAME, GPIO_PIN, GPIO_FUNCTION, GPIO_TYPE, GPIO_VALUE, GPIO_INIT} gpio_opts = GPIO_VALUE;
+enum {GPIO_NAME, GPIO_PIN, GPIO_FUNCTION, GPIO_TYPE, GPIO_VALUE, GPIO_INIT, GPIO_TOPIC} gpio_opts = GPIO_VALUE;
 enum {BLK_MAIN, BLK_SENSORS, BLK_INPUT, BLK_GPIOS} blk_opts = BLK_MAIN;
 static char *curvar;
 
@@ -260,8 +260,11 @@ new_gpio(gpios_t *gp_set, char *name)
 	return (gp);
 }
 
+/*
+ * It returns a pointer to found element, NULL in case non results were found
+ */
 gpio_t *
-gpiopin_by_type(gpios_t *gp_set, gpio_type_t gtype, char *name)
+gpiopin_by_type(gpios_t *gp_set, gpio_type_t gtype, char *name/*UNUSED*/)
 {
 	gpio_t 	*gp,*ret = NULL;
 
@@ -282,11 +285,13 @@ gpiopin_by_type(gpios_t *gp_set, gpio_type_t gtype, char *name)
 
 
 static int
-proc_leds_opt(char *scalar_value) {
+proc_gpios_opt(char *scalar_value) {
 	if (!strcasecmp(scalar_value, "name")) {
 		gpio_opts = GPIO_NAME;
 	} else if (!strcasecmp(scalar_value, "gpio_pin")) {
 		gpio_opts = GPIO_PIN;
+	} else if (!strcasecmp(scalar_value, "topic")) {
+		gpio_opts = GPIO_TOPIC;
 	} else if (!strcasecmp(scalar_value, "type")) {
 		gpio_opts = GPIO_TYPE;
 	} else {
@@ -297,6 +302,9 @@ proc_leds_opt(char *scalar_value) {
 			case GPIO_PIN:
 				curgpio->g_pin = atoi(scalar_value);
 				break;
+			case GPIO_TOPIC:
+				curgpio->g_topic = strdup(scalar_value);
+				break;
 			case GPIO_TYPE:
 				if (!strcasecmp(scalar_value, "failure")) {
 					curgpio->g_type = G_LED_FAILURE;
@@ -304,6 +312,8 @@ proc_leds_opt(char *scalar_value) {
 					curgpio->g_type = G_LED_NOTIFY;
 				}  else if (!strcasecmp(scalar_value, "pwr_btn")) {
 					curgpio->g_type = G_PWR_BTN;
+				}  else if (!strcasecmp(scalar_value, "pir_sensor")) {
+					curgpio->g_type = G_PIR_SENSOR;
 				}  else if (!strcasecmp(scalar_value, "reserved")) {
 					curgpio->g_type = G_RESERVED;
 				}  else  {
@@ -329,7 +339,7 @@ yaml_assign_scalar(yaml_event_t *t)
 				return (-1);
 			break;
 		case BLK_GPIOS:
-			if (proc_leds_opt(t->data.scalar.value) < 0) {
+			if (proc_gpios_opt(t->data.scalar.value) < 0) {
 				return (-1);
 			}
 			break;
