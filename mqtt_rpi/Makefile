@@ -1,7 +1,7 @@
-DFLAGS=-DPARSER_DEBUG -DMQTTDEBUG
+DFLAGS=-DPARSER_DEBUG -DMQTTDEBUG -DPTHREAD_PIR
 CFLAGS+=-g -W
 CC=gcc
-LDFLAGS=  -lmosquitto -lyaml -lwiringPi -lbsd
+LDFLAGS=  -lmosquitto -lyaml -lwiringPi -lbsd -lpthread
 	
 
 mqtt_rpi: mqtt_rpi.o mqtt_wiringpi.o mqtt_parse_config.o mqtt_sensors.o testBMP085.o smbus.o
