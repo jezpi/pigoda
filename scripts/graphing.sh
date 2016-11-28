@@ -54,14 +54,24 @@ echo "=> Creating png graph - pir on badacz"
 		--start 'now-12h' --end now \
 		--font='DEFAULT:7:' \
 		--title="PIR sensor stats - movement rate in one second" \
+		--lower-limit 0 \
+		--upper-limit 1 \
 		--watermark="Date `date`" \
 		--alt-y-grid \
 		--rigid \
 		DEF:movm=${RRD_DB_PATH}/pir.rrd:pir:AVERAGE \
-		VDEF:movmlast=movm,AVERAGE \
+		VDEF:movmavg=movm,AVERAGE \
+		VDEF:movmmax=movm,MAXIMUM \
+		VDEF:movmmin=movm,MINIMUM \
+		VDEF:movmlast=movm,LAST \
 		AREA:movm#0000FF:"Movement rate\n" \
 		LINE1:movmlast#FF00FF:"Average movement rate\n":dashes \
-		GPRINT:movm:AVERAGE:"Avg\: %5.2lf\n" 
+		LINE1:movmmax#F000FF:"Average movement rate\n":dashes \
+		LINE1:movmmin#FA00FF:"Average movement rate\n":dashes \
+		GPRINT:movm:AVERAGE:"Avg\: %5.2lf\n" \
+		GPRINT:movm:MAX:"Max\: %5.2lf\n" \
+		GPRINT:movm:MIN:"Min\: %5.2lf\n" \
+		GPRINT:movm:LAST:"Last\: %5.2lf\n" 
 
 }
 
@@ -84,6 +94,7 @@ echo "=> Creating png graph - tempin on badacz in made"
 		GPRINT:temp_in:AVERAGE:"Avg\: %5.2lf\n" \
 		GPRINT:temp_in:MIN:"Min\: %5.2lf\n" \
 		GPRINT:temp_in:LAST:"Last\: %5.2lf\n" 
+
 }
 
 graph_tempin_guerni() {
@@ -482,7 +493,16 @@ do
 				fi
 			done
 			;;
-		*)
+			*)
+				update_graphs $cmd;
+				eval graph_$cmd
+				if [ $? -ne 0 ]; then
+					echo "!> graph failure. Trying to graph by anonymously"
+					graph_unknown ${cmd}
+				fi
+				
+			;;
+		help)
 			echo "$0 commands: [exp|everything]"
 			exit 64;
 			;;
