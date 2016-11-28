@@ -957,7 +957,7 @@ update_screen_stats(struct mq_ch_screen *scr)
 	time(&curtime);
 	mvwprintw(scr->win_stat, linecnt++, 1, "              %25s: %11s     fail/ok\tlastupdate", "sensor name", "value");
 	do {
-		mvwprintw(scr->win_stat, linecnt, 1, "              %25s: %11f     %4lu/%lu\t%2lu", 
+		mvwprintw(scr->win_stat, linecnt, 1, "              %25s: %11f     %4lu/%lu\t%9.lu", 
 								sp->ss_name, 
 								sp->ss_value, 
 								sp->ss_err_sqlite,
