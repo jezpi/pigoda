@@ -333,8 +333,14 @@ MQTT_loop(void *m, int tout)
 
 		switch (ret) {
 			case MOSQ_ERR_ERRNO:
-				MQTT_log("error %d\n", errno);
-				main_loop = false;
+				if (errno == EHOSTUNREACH) {
+					mqtt_conn_dead = true;/* XXX temporal */
+					errno = 0;
+					MQTT_log("Connection lost. Reconnecting in a while...\n");
+				} else {
+					MQTT_log("System error (errno=%d)=%s\n", errno, strerror(errno));
+					main_loop = false;
+				}
 				break;
 			case MOSQ_ERR_INVAL:
 				MQTT_log( "input parametrs invalid\n");
