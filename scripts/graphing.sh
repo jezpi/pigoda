@@ -4,6 +4,8 @@
 dt=`date +%s`
 
 rrd_graph_def () {
+
+	echo "=> Graphing $1"
 oIFS=$IFS
 IFS='
 '
@@ -14,7 +16,7 @@ IFS='
 		--font='WATERMARK:8:Ubuntu' \
 		--font='LEGEND:9:Ubuntu'  \
 		--color='BACK#E1E1E1' \
-		--color='BACK#FFF9F9' \
+		--lazy \
 		--legend-position=south \
 		--legend-direction=topdown \
 		--grid-dash=1:3 \
@@ -25,7 +27,6 @@ IFS=$oIFS
 
 graph_micguernilaptop () {
 	name=micguernilaptop
-	echo "=> Creating png graph - microphone on my laptop in guerni"
 	rrd_graph_def ${RRD_GRAPH_PATH}/${name}.png \
 		-w 785 -h 120 -a PNG \
 		--slope-mode \
@@ -60,7 +61,6 @@ graph_unknown () {
 		--graph-render-mode=normal \
 		--grid-dash=1:3 \
 		--border=0 \
-		--lazy \
 		DEF:uval=${RRD_DB_PATH}/${name}.rrd:${name}:AVERAGE \
 		VDEF:uvalavg=uval,AVERAGE \
 		VDEF:uvalmin=uval,MINIMUM \
@@ -113,8 +113,7 @@ graph_humidity () {
 		-w 785 -h 120 -a PNG \
 		--slope-mode \
 		--start 'now-3h' --end now \
-		--font='DEFAULT:7:' \
-		--title="Humidity l24" \
+		--title="Humidity L24" \
 		--watermark="Date `date`" \
 		--alt-y-grid \
 		--vertical-label '%' \
@@ -124,9 +123,9 @@ graph_humidity () {
 		DEF:hum=${RRD_DB_PATH}/humidity.rrd:humidity:AVERAGE \
 		VDEF:humlast=hum,LAST \
 		VDEF:hummax=hum,MAXIMUM \
-		AREA:hum#0000FF:"Humidity (%)\t" \
-		LINE1:hummax#FF00FF:"Humidity max(%)\t":dashes \
-		LINE1:humlast#FF00FF:"Humidity last(%)\n":dashes \
+		AREA:hum#6A4E9D:"Humidity (%)\t" \
+		LINE1:hummax#E8006D:"Humidity max(%)\t":dashes \
+		LINE1:humlast#81C21D:"Humidity last(%)\n":dashes \
 		GPRINT:hum:MAX:"Max\: %5.2lf\n" \
 		GPRINT:hum:AVERAGE:"Avg\: %5.2lf\n" \
 		GPRINT:hum:MIN:"Min\: %5.2lf\n" \
@@ -206,17 +205,35 @@ graph_vc_temp_badacz() {
 		-w 785 -h 120 -a PNG \
 		--slope-mode \
 		--start 'now-3h' --end now \
-		--title="vc_core temperature " \
+		--title="vc_core temperature on badacz" \
 		--watermark="Date `date`" \
 		--alt-y-grid \
 		--rigid \
-		DEF:vc_temp=${RRD_DB_PATH}/vc_temp_badacz.rrd:vctemp_badacz:AVERAGE \
+		DEF:vc_temp=${RRD_DB_PATH}/vc_temp_badacz.rrd:vc_temp_badacz:AVERAGE \
 		LINE1:vc_temp#D40000:"vc_temp(C)" \
 		GPRINT:vc_temp:MAX:"Max\: %5.2lf" \
 		GPRINT:vc_temp:AVERAGE:"Avg\: %5.2lf" \
 		GPRINT:vc_temp:MIN:"Min\: %5.2lf" \
 		GPRINT:vc_temp:LAST:"Last\: %5.2lf" 
 
+}
+
+graph_vc_temp_badacz_weekly() {
+	echo "=> Creating png graph - vc_temp"
+	rrd_graph_def ${RRD_GRAPH_PATH}/vc_temp_badacz_weekly.png \
+		-w 785 -h 120 -a PNG \
+		--slope-mode \
+		--start 'now-7d' --end now \
+		--title="vc_core temperature on badacz" \
+		--watermark="Date `date`" \
+		--alt-y-grid \
+		--rigid \
+		DEF:vc_temp=${RRD_DB_PATH}/vc_temp_badacz.rrd:vc_temp_badacz:AVERAGE \
+		LINE1:vc_temp#D40000:"vc_temp(C)" \
+		GPRINT:vc_temp:MAX:"Max\: %5.2lf" \
+		GPRINT:vc_temp:AVERAGE:"Avg\: %5.2lf" \
+		GPRINT:vc_temp:MIN:"Min\: %5.2lf" \
+		GPRINT:vc_temp:LAST:"Last\: %5.2lf" 
 }
 
 #--lower-limit 15 \
@@ -228,7 +245,7 @@ echo "=> Creating png graph - temperature relation"
 rrd_graph_def ${RRD_GRAPH_PATH}/temp_rel.png \
 	-w 785 -h 420 -a PNG \
 	--slope-mode \
-	--start 'now-22h' --end now \
+	--start 'now-92h' --end now \
 	--title="Relation temperature " \
 	--watermark="Date `date`" \
 	--alt-autoscale \
@@ -239,12 +256,14 @@ rrd_graph_def ${RRD_GRAPH_PATH}/temp_rel.png \
 	DEF:temp_in=${RRD_DB_PATH}/tempin.rrd:tempin:AVERAGE \
 	VDEF:tempinlast=temp_in,LAST \
 	DEF:vc_temp_rpitrois=${RRD_DB_PATH}/vc_temp_rpitrois.rrd:vc_temp_rpitrois:AVERAGE \
+	DEF:temp_g=${RRD_DB_PATH}/tempin_guerni.rrd:tempin_guerni:AVERAGE \
 	COMMENT:"Legend\:\l" \
 	LINE2:vc_temp_badacz#D40000:"temp vc_core badacz (C)" \
 	LINE2:vc_temp_rpitrois#063F68:"temp vc_core rpitrois (C)" \
 	LINE1:vctemplast#C837AB:"last temp (C)":dashes \
 	AREA:temp_in#FF00FF:"temp inside(C)\l" \
 	AREA:temp_out#0080FF:"temp outside(C)\t" \
+	AREA:temp_g#FFB300:"temp l24(C)\t" \
 	LINE1:tempoutlast#FF6600:"temp outside last (C)\t" \
 	LINE1:tempinlast#00CCFF:"temp inside last (C)\n" \
 	GPRINT:vc_temp_badacz:MAX:"Max vc_core\: %5.2lf\n" \
@@ -269,7 +288,7 @@ rrd_graph_def ${RRD_GRAPH_PATH}/vc_temp_badacz_daily.png \
 	--watermark="Date `date`" \
 	--alt-y-grid \
 	--rigid \
-	DEF:vc_temp=${RRD_DB_PATH}/vc_temp_badacz.rrd:vctemp_badacz:AVERAGE \
+	DEF:vc_temp=${RRD_DB_PATH}/vc_temp_badacz.rrd:vc_temp_badacz:AVERAGE \
 	VDEF:vctempmax=vc_temp,MAXIMUM \
 	AREA:vc_temp#D40000:"temp(C)\l" \
 	LINE1:vctempmax#008000:"vc temp max(C)\l" \
@@ -551,7 +570,7 @@ do
 				if [ $? -ne 0 ]; then
 					echo "!> daily graph failure."
 				else
-					printf '<img src="./%s.png" />\n' "${t}" >> /var/www/default/mq_graphs/graphs_daily.html
+					printf '<img src="./%s_daily.png" />\n' "${t}" >> /var/www/default/mq_graphs/graphs_daily.html
 				fi
 			done
 
@@ -565,7 +584,7 @@ do
 			do 
 				
 				echo $t; 
-				printf '<img src="./%s_daily.png" />\n' "${t}" >> /var/www/default/mq_graphs/graphs.html
+				printf '<img src="./%s.png" />\n' "${t}" >> /var/www/default/mq_graphs/graphs.html
 				update_graphs $t;
 				eval graph_$t
 				if [ $? -ne 0 ]; then
