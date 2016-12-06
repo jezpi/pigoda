@@ -39,13 +39,13 @@ static unsigned short DEBUG_FLAG=0x4;
 #define ddprintf if (DEBUG_FLAG>0x4) printf
 #endif
 #ifdef MQTTDEBUG
-void tramp(void)
+void trap(void)
 {
 	int a = 2+2;
 	return;
 }
 #else
-#define tramp() ;
+#define trap() ;
 #endif
 
 struct router_stats {
