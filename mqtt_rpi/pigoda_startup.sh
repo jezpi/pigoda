@@ -2,8 +2,8 @@
 
 ### BEGIN INIT INFO
 # Provides:             pigoda
-# Required-Start:       $remote_fs $syslog
-# Required-Stop:        $remote_fs $syslog
+# Required-Start:    	$local_fs $remote_fs $network $syslog $named
+# Required-Stop:     	$local_fs $remote_fs $network $syslog $named
 # Default-Start:        2 3 4 5
 # Default-Stop:         0 1 6
 # Short-Description:    pigoda v1
@@ -17,15 +17,13 @@
 DAEMON_NAME="mqtt_rpi"
 PIDFILE="/var/run/${DAEMON_NAME}.pid"
 #/usr/bin/gpio export 27 output
-if [ ! -d '/sys/class/gpio/gpio18' ];then
-	/usr/bin/gpio export 18 output
-fi
 
 #gpiop="/sys/class/gpio/gpio27/value"
 
 case $1 in
 	start)
-		/usr/bin/mqtt_rpi /etc/mqtt_rpi.yaml
+		sleep 60; # waiting for network
+		/usr/bin/mqtt_rpi -c /etc/mqtt_rpi.yaml
 		#echo 1 > $gpiop
 		;;
 	restart)
@@ -36,7 +34,7 @@ case $1 in
 		fi
 		echo "=> Sleeping 60 secs before restart"
 		sleep 60
-		/usr/bin/${DAEMON_NAME} /etc/mqtt_rpi.yaml
+		/usr/bin/${DAEMON_NAME} -c /etc/mqtt_rpi.yaml
 		
 		;;
 	stop)
