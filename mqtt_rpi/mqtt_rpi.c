@@ -55,8 +55,8 @@ struct router_stats {
 };
 
 struct pir_config {
-	unsigned int	pir_pin;
-	unsigned int	pir_led_pin;
+	gpio_t 		 *pir_gpio;
+	gpio_t 		 *pir_led_gpio;
 	char		*pir_mqtt_topic;
 	struct mosquitto *pir_mosq_connection;
 };
@@ -144,7 +144,7 @@ static bool enable_pir(mqtt_global_cfg_t *myconf);
 
 /*
  *
- * usage: mqtt_rpi [config_file]
+ * usage: mqtt_rpi -c [config_file] -f -v -V
  */
 int
 main(int argc, char **argv)
@@ -156,6 +156,7 @@ main(int argc, char **argv)
 	pid_t	procpid;
 	bool first_run = true;
 	bool do_pool_sensors = true;
+	bool foreground_flg = false;
 
 	proc_command = false;
 	time(&Mosquitto.mqh_start_time);
@@ -165,7 +166,7 @@ main(int argc, char **argv)
 	setrlimit(RLIMIT_CORE, &lim);
 	__PROGNAME = basename(argv[0]);
 
-	while((opt = getopt(argc, argv, "c:vVd:")) != -1) {
+	while((opt = getopt(argc, argv, "c:vVd:f")) != -1) {
 		switch(opt) {
 			case 'c':
 				configfile = strdup(optarg);
@@ -173,6 +174,9 @@ main(int argc, char **argv)
 			case 'd':
 				break;
 			case 'v':
+				break;
+			case 'f':
+				foreground_flg=true;
 				break;
 			case 'V':
 				version();
@@ -202,7 +206,7 @@ main(int argc, char **argv)
 			exit(3);
 		}
 	}
-	if (myMQTT_conf.daemon) {
+	if (myMQTT_conf.daemon && ! foreground_flg) {
 		daemon(1, 0);
 		MQTT_log("Daemonizing!\n");
 	} else {
@@ -813,24 +817,33 @@ mqtt_pir_th_routine(void *pir_cnf)
 
 	cnf = (struct pir_config *) pir_cnf;
 	m = cnf->pir_mosq_connection;
-	pirpin = cnf->pir_pin;
-	ledpin = cnf->pir_led_pin;
-	pinMode(cnf->pir_pin, INPUT);
-	pinMode(cnf->pir_led_pin, OUTPUT); /* Pin 0? */
-	digitalWrite(cnf->pir_led_pin, HIGH);
+	pirpin = cnf->pir_gpio->g_pin;
+	if (cnf->pir_led_gpio != NULL)
+		ledpin = cnf->pir_led_gpio->g_pin;
+	else 
+		ledpin = -1;
+
+	pinMode(pirpin, INPUT);
+	if (ledpin > 0) {
+		pinMode(ledpin, OUTPUT); /* Pin 0? */
+		digitalWrite(ledpin, HIGH);
+	}
 
 	for (; ; ) {
 		for (tick = 0, positive=0; tick < 60; tick++) {
 			if ((val = digitalRead(pirpin)) == HIGH) {
 				positive++;
-				digitalWrite(ledpin, HIGH);
+				if (ledpin > 0)
+					digitalWrite(ledpin, HIGH);
 				actled = true;
 			} else if (actled == true) {
-				digitalWrite(ledpin, LOW);
+				if (ledpin > 0)
+					digitalWrite(ledpin, LOW);
 			}
 			usleep(1000000);
 			if (actled == true) {
-				digitalWrite(ledpin, LOW);
+				if (ledpin > 0)
+					digitalWrite(ledpin, LOW);
 				actled = false;
 			}
 		}
@@ -855,13 +868,14 @@ pool_sensors(struct mosquitto *mosq)
 	double value;
 	char	*endptr;
 	long pin;
+	bool 	sensor_ret = false;
 
 	sensor_t *sp;
 	sp = myMQTT_conf.sensors->sn_head;
 	do {
 		switch(sp->s_type) {
 			case SENS_W1:
-				value = get_temperature(sp->s_address);
+				sensor_ret = get_temperature(sp->s_address, &value);
 				break;
 			case SENS_I2C:
 				switch(sp->s_i2ctype) {
@@ -875,7 +889,10 @@ pool_sensors(struct mosquitto *mosq)
 				break;
 
 		}
-		if (MQTT_pub(mosq, sp->s_channel, false, "%f", value) < 0) {
+		if (sensor_ret == true ) {
+			MQTT_pub(mosq, sp->s_channel, false, "%f", value);
+		} else {
+			MQTT_log("%s query failure\n", sp->s_name);
 			return(-1);
 		}
 		sp = sp->s_next;
@@ -887,8 +904,8 @@ pool_sensors(struct mosquitto *mosq)
 /*
  *
  * struct pir_config {
- *	unsigned int	pir_pin;
- *	unsigned int	pir_led_pin;
+ *	gpio_t 		*pir_gpio;
+ *	gpio_t 		*pir_led_gpio;
  *	char		*pir_mqtt_topic;
  *	struct mosquitto *pir_mosq_connection;
  * };
@@ -898,30 +915,28 @@ static bool
 enable_pir(mqtt_global_cfg_t *myconf)
 {
 	struct pir_config *pir;
-	gpio_t	*g;
 
 	if (myconf->gpios == NULL)  {
 		MQTT_printf("GPIOs not configured\n");
 		return (false);
 	}
-	if ((g = gpiopin_by_type(myconf->gpios, G_PIR_SENSOR, NULL)) == NULL) {
+	pir = malloc(sizeof(struct pir_config));
+
+	if ((pir->pir_gpio = gpiopin_by_type(myconf->gpios, G_PIR_SENSOR, NULL)) == NULL) {
 		MQTT_log("PIR_SENSOR configuration is missing\n");
 		return (false);
 	}
-	pir = malloc(sizeof(struct pir_config));
-	pir->pir_pin = g->g_pin;
-	if (g->g_topic == NULL) {
+	if (pir->pir_gpio->g_topic == NULL) {
 		MQTT_log("You must specify a topic to publish in\n");
 		return (false);
 	}
-	pir->pir_mqtt_topic = strdup(g->g_topic);
+
+	pir->pir_mqtt_topic = strdup(pir->pir_gpio->g_topic);
 	pir->pir_mosq_connection = mqtt_connection;
 
-	if ((g = gpiopin_by_type(myconf->gpios, G_LED_FAILURE, NULL)) == NULL) {
-		MQTT_log("G_LED_FAILURE not configured\n");
-		return (false);
+	if ((pir->pir_led_gpio = gpiopin_by_type(myconf->gpios, G_LED_FAILURE, NULL)) == NULL) {
+		MQTT_log("G_LED_FAILURE (which is used by pir to report activity is not configured\n");
 	}
-	pir->pir_led_pin = g->g_pin;
 	fork_mqtt_pir(pir);
 	return (true);
 	
