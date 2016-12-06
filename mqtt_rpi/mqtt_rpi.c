@@ -134,7 +134,7 @@ static void shutdown_linux(void);
 static int pool_sensors(struct mosquitto *mosq);
 int fork_mqtt_pir(struct pir_config *);
 static void siginfo(int signo, siginfo_t *info, void *context);
-static bool mqtt_rpi_init(const char *progname, char *conf);
+static bool mqtt_rpi_init(const char *, const char *);
 static bool enable_pir(mqtt_global_cfg_t *myconf);
 
 /*
@@ -149,7 +149,7 @@ static bool enable_pir(mqtt_global_cfg_t *myconf);
 int
 main(int argc, char **argv)
 {
-	char *bufp;
+	char *bufp, *configfile = NULL;
 	int mqloopret=0;
 	int flags, opt;
 	struct rlimit lim;
@@ -168,6 +168,7 @@ main(int argc, char **argv)
 	while((opt = getopt(argc, argv, "c:vVd:")) != -1) {
 		switch(opt) {
 			case 'c':
+				configfile = strdup(optarg);
 				break;
 			case 'd':
 				break;
@@ -183,10 +184,11 @@ main(int argc, char **argv)
 
 		}
 	}
-	
+	argc-=optind;
+	argv+=optind;
 
-	if ((main_loop = mqtt_rpi_init(__PROGNAME, argv[1])) == false) {
-		fprintf(stderr, "%s: failed to init\n", __PROGNAME);
+	if ((main_loop = mqtt_rpi_init(__PROGNAME, configfile)) == false) {
+		fprintf(stderr, "%s: failed to init with %s\n", __PROGNAME, configfile);
 		exit(3);
 	}
 	if (myMQTT_conf.sensors == NULL) {
@@ -715,7 +717,7 @@ MQTT_sub(struct mosquitto *m, const char *fmt_topic, ...)
 
 
 static bool
-mqtt_rpi_init(const char *progname, char *conf)
+mqtt_rpi_init(const char *progname, const char *conf)
 {
 	bool   ret = true;
 	char  *configfile, *bufp, *p;
@@ -728,7 +730,7 @@ mqtt_rpi_init(const char *progname, char *conf)
 		__HOSTNAME = "nil";
 
 	/*p = basename(progname);*/
-	configfile = ((conf != NULL)?conf:DEFAULT_CONFIG_FILE);
+	configfile = (char *) ((conf != NULL)?conf:DEFAULT_CONFIG_FILE);
 	if (parse_configfile(configfile, &myMQTT_conf) < 0) {
 		ret = false;
 		fprintf(stderr, "Failed to parse config file \"%s\"\n", configfile);
@@ -903,20 +905,20 @@ enable_pir(mqtt_global_cfg_t *myconf)
 		return (false);
 	}
 	if ((g = gpiopin_by_type(myconf->gpios, G_PIR_SENSOR, NULL)) == NULL) {
-		MQTT_printf("PIR_SENSOR configuration is missing\n");
+		MQTT_log("PIR_SENSOR configuration is missing\n");
 		return (false);
 	}
 	pir = malloc(sizeof(struct pir_config));
 	pir->pir_pin = g->g_pin;
 	if (g->g_topic == NULL) {
-		MQTT_printf("You must specify a topic to publish in\n");
+		MQTT_log("You must specify a topic to publish in\n");
 		return (false);
 	}
 	pir->pir_mqtt_topic = strdup(g->g_topic);
 	pir->pir_mosq_connection = mqtt_connection;
 
 	if ((g = gpiopin_by_type(myconf->gpios, G_LED_FAILURE, NULL)) == NULL) {
-		MQTT_printf("G_LED_FAILURE not configured\n");
+		MQTT_log("G_LED_FAILURE not configured\n");
 		return (false);
 	}
 	pir->pir_led_pin = g->g_pin;
