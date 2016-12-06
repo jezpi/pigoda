@@ -25,6 +25,7 @@
 #include <bsd/libutil.h> /* pidfile_open(3) etc. */
 #include <wiringPi.h> /* defs of HIGH and LOW */
 
+
 #include "mqtt_parser.h"
 #include "mqtt.h"
 #include "mqtt_sensors.h"
@@ -38,13 +39,13 @@ static unsigned short DEBUG_FLAG=0x4;
 #define ddprintf if (DEBUG_FLAG>0x4) printf
 #endif
 #ifdef MQTTDEBUG
-void tramp(void)
+void trap(void)
 {
 	int a = 2+2;
 	return;
 }
 #else
-#define tramp() ;
+#define trap() ;
 #endif
 
 struct router_stats {
@@ -127,6 +128,7 @@ static int set_logging(mqtt_global_cfg_t *myconf);
 static void sig_hnd(int);
 
 static void usage(void);
+static void version(void);
 static void shutdown_linux(void);
 
 static int pool_sensors(struct mosquitto *mosq);
@@ -149,6 +151,7 @@ main(int argc, char **argv)
 {
 	char *bufp;
 	int mqloopret=0;
+	int flags, opt;
 	struct rlimit lim;
 	pid_t	procpid;
 	bool first_run = true;
@@ -160,8 +163,29 @@ main(int argc, char **argv)
 	lim.rlim_cur = RLIM_INFINITY;
 	lim.rlim_max = RLIM_INFINITY;
 	setrlimit(RLIMIT_CORE, &lim);
+	__PROGNAME = basename(argv[0]);
 
-	if ((main_loop = mqtt_rpi_init(argv[0], argv[1])) == false) {
+	while((opt = getopt(argc, argv, "c:vVd:")) != -1) {
+		switch(opt) {
+			case 'c':
+				break;
+			case 'd':
+				break;
+			case 'v':
+				break;
+			case 'V':
+				version();
+				exit(0);
+				break;
+			default:
+				usage();
+				exit(64);
+
+		}
+	}
+	
+
+	if ((main_loop = mqtt_rpi_init(__PROGNAME, argv[1])) == false) {
 		fprintf(stderr, "%s: failed to init\n", __PROGNAME);
 		exit(3);
 	}
@@ -704,7 +728,6 @@ mqtt_rpi_init(const char *progname, char *conf)
 		__HOSTNAME = "nil";
 
 	/*p = basename(progname);*/
-	__PROGNAME = basename(progname);
 	configfile = ((conf != NULL)?conf:DEFAULT_CONFIG_FILE);
 	if (parse_configfile(configfile, &myMQTT_conf) < 0) {
 		ret = false;
@@ -1035,6 +1058,33 @@ shutdown_linux(void)
 			MQTT_printf("Executed halt command\n");
 	}
 	return;
+}
+static void
+version(void)
+{
+	fprintf(stderr, "%s Compiled with gcc %s on %s %s\n", __PROGNAME, __VERSION__, __DATE__, __TIME__);
+#ifdef MQTTDEBUG
+	fprintf(stderr, "\tMQTTDEBUG on\n");
+#endif
+#ifdef PTHREAD_PIR
+	fprintf(stderr, "\tMQTTDEBUG on\n");
+#endif
+#ifdef __OPTIMIZE__
+	fprintf(stderr, "\tOptimized\n");
+#endif
+#ifdef PARSER_DEBUG
+	fprintf(stderr, "\tPARSER_DEBUG\n");
+#endif
+
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+        printf("\tbyte order=LITTLE_ENDIAN\n");
+#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+        printf("\tbyte order=BIG_ENDIAN\n");
+#endif
+#ifdef __ELF__
+	fprintf(stderr, "\telf binary\n");
+#endif
+
 }
 
 static void
