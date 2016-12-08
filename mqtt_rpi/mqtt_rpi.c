@@ -363,7 +363,8 @@ MQTT_loop(void *m, int tout)
 
 		switch (ret) {
 			case MOSQ_ERR_ERRNO:
-				if (errno == EHOSTUNREACH) {
+
+				if (errno == EHOSTUNREACH || errno == ENETUNREACH || errno == ENETRESET || errno == ENETDOWN || errno == ENOTCONN) {
 					mqtt_conn_dead = true;/* XXX temporal */
 					errno = 0;
 					MQTT_log("Connection lost. Reconnecting in a while...\n");
@@ -619,7 +620,8 @@ MQTT_init(mqtt_hnd_t *m, bool c_sess, const char *id)
 
 	mosquitto_lib_init();
 	mosquitto_lib_version(&lv_major, &lv_minor, &lv_rev);
-	MQTT_log( "%s@%s libmosquitto %d.%d rev=%d\n", id, __HOSTNAME, lv_major, lv_minor, lv_rev);
+	MQTT_log( "Init %s %s@%s libmosquitto %d.%dr%d\n", __PROGNAME, id, __HOSTNAME, lv_major, lv_minor, lv_rev);
+	MQTT_log( "Compiled on %s %s\n", __DATE__, __TIME__);
 	MQTT_printf( "Init\t%s@%s libmosquitto %d.%d rev=%d\n", id, __HOSTNAME, lv_major, lv_minor, lv_rev);
 	strncpy(m->mqh_id, id, sizeof(m->mqh_id));
 	bzero(m->mqh_msgbuf, sizeof(m->mqh_msgbuf));
@@ -1081,16 +1083,22 @@ version(void)
 {
 	fprintf(stderr, "%s Compiled with gcc %s on %s %s\n", __PROGNAME, __VERSION__, __DATE__, __TIME__);
 #ifdef MQTTDEBUG
-	fprintf(stderr, "\tMQTTDEBUG on\n");
+	fprintf(stderr, "\tMQTTDEBUG\t- enabled\n");
+#else
+	fprintf(stderr, "\tMQTTDEBUG\t- disabled\n");
 #endif
 #ifdef PTHREAD_PIR
-	fprintf(stderr, "\tMQTTDEBUG on\n");
+	fprintf(stderr, "\tPTHREAD_PIR\t- enabled\n");
+#else
+	fprintf(stderr, "\tPTHREAD_PIR\t- disabled\n");
 #endif
 #ifdef __OPTIMIZE__
 	fprintf(stderr, "\tOptimized\n");
 #endif
 #ifdef PARSER_DEBUG
-	fprintf(stderr, "\tPARSER_DEBUG\n");
+	fprintf(stderr, "\tPARSER_DEBUG\t- enabled\n");
+#else
+	fprintf(stderr, "\tPARSER_DEBUG\t- disabled\n");
 #endif
 
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
