@@ -1,8 +1,9 @@
 #ifndef _MQTT_PARSER_H_
 #define  _MQTT_PARSER_H_
+
 typedef enum {SENS_W1, SENS_I2C, SENS_DHTXX} stype_t;   
 typedef enum {I2C_PCF8591P, I2C_BMP85} i2ctype_t;   
-typedef enum {G_LED_FAILURE, G_LED_NOTIFY, G_PWR_BTN, G_PIR_SENSOR, G_RESERVED} gpio_type_t;
+typedef enum {G_LED_FAILURE, G_LED_NOTIFY, G_PWR_BTN, G_PIR_SENSOR, G_TIP120, G_RELAY, G_RESERVED} gpio_type_t;
 
 typedef struct gpio {
 	char 		*g_name;
