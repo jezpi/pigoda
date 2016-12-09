@@ -34,7 +34,10 @@ static const signed short notify_led_pin = 2;*/
 gpio_t *failure_gpio;
 gpio_t *notify_gpio;
 gpio_t *pwr_btn_gpio;
+gpio_t *relay_gpio;
 gpio_t *tip120_gpio;
+
+extern int MQTT_printf(const char *, ...);
 
 /* returned values:
  * 0 = no gpios configured
@@ -61,17 +64,27 @@ gpios_setup(gpios_t *gp_set)
 					pinMode(gp->g_pin, INPUT);
 					pwr_btn_gpio = gp;
 					cnt++;
-				break;
+					break;
 				case G_LED_FAILURE:
 					failure_gpio = gp;
 					pinMode(gp->g_pin, OUTPUT);
 					cnt++;
-				break;
+					break;
 				case G_LED_NOTIFY:
 					notify_gpio = gp;
 					pinMode(gp->g_pin, OUTPUT);
 					cnt++;
-				break;
+					break;
+				case G_TIP120:
+					tip120_gpio = gp;
+					pinMode(gp->g_pin, OUTPUT);
+					cnt++;
+					break;
+				case G_RELAY:
+					relay_gpio = gp;
+					pinMode(gp->g_pin, OUTPUT);
+					cnt++;
+					break;
 			}
 		}
 		gp = gp->g_next;
@@ -123,7 +136,8 @@ startup_led_act(int ledticks, int blink_delay)
 	return (1);
 }
 
-int startup_fanctl()
+int
+startup_fanctl()
 {
 	int n = 0;
 	
@@ -189,7 +203,6 @@ fanctl(short act, int *args)
 	return (ret);
 }
 
-extern int MQTT_printf(const char *, ...);
 
 int
 poll_pwr_btn()
@@ -212,3 +225,18 @@ poll_pwr_btn()
 	}
 	return (ret);
 }
+
+
+int
+relay_ctl(int cmd)
+{
+	if (relay_gpio == NULL)
+		return (-1);
+	if (!cmd) {
+		digitalWrite(relay_gpio->g_pin, LOW);
+	} else {
+		digitalWrite(relay_gpio->g_pin, HIGH);
+	}
+	return (0);
+}
+
