@@ -7,7 +7,6 @@
 : ${MQTT_PORT:='1883'}
 
 mqtt_pub () {
-#	mosquitto_pub -p 1883 -u badacz -P 'GuwajVas4' -h mail.obin.org $*
 	mosquitto_pub -p ${MQTT_PORT} -u ${MQTT_USER} -P ${MQTT_PASSWORD} -h ${MQTT_HOST} $*
 }
 
