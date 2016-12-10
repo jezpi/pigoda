@@ -25,10 +25,12 @@
 #include <bsd/libutil.h> /* pidfile_open(3) etc. */
 #include <wiringPi.h> /* defs of HIGH and LOW */
 
+
 #include "mqtt_parser.h"
 #include "mqtt.h"
 #include "mqtt_sensors.h"
 #include "mqtt_wiringpi.h"
+#include "mqtt_cmd.h"
 #ifdef MQTTDEBUG
 
 static bool mqtt_connected = false;
@@ -38,13 +40,13 @@ static unsigned short DEBUG_FLAG=0x4;
 #define ddprintf if (DEBUG_FLAG>0x4) printf
 #endif
 #ifdef MQTTDEBUG
-void tramp(void)
+void trap(void)
 {
 	int a = 2+2;
 	return;
 }
 #else
-#define tramp() ;
+#define trap() ;
 #endif
 
 struct router_stats {
@@ -54,8 +56,8 @@ struct router_stats {
 };
 
 struct pir_config {
-	unsigned int	pir_pin;
-	unsigned int	pir_led_pin;
+	gpio_t 		 *pir_gpio;
+	gpio_t 		 *pir_led_gpio;
 	char		*pir_mqtt_topic;
 	struct mosquitto *pir_mosq_connection;
 };
@@ -79,7 +81,6 @@ typedef struct mqtt_hnd {
 	pid_t 			 mqh_mqttpir_pid;
 } mqtt_hnd_t;
 
-#include "mqtt_cmd.h"
 
 static mqtt_hnd_t Mosquitto;
 static FILE *logfile;
@@ -127,12 +128,13 @@ static int set_logging(mqtt_global_cfg_t *myconf);
 static void sig_hnd(int);
 
 static void usage(void);
-static void shutdown_linux(void);
+static void version(void);
+static void shutdown_linux(const char *);
 
 static int pool_sensors(struct mosquitto *mosq);
 int fork_mqtt_pir(struct pir_config *);
 static void siginfo(int signo, siginfo_t *info, void *context);
-static bool mqtt_rpi_init(const char *progname, char *conf);
+static bool mqtt_rpi_init(const char *, const char *);
 static bool enable_pir(mqtt_global_cfg_t *myconf);
 
 /*
@@ -142,17 +144,19 @@ static bool enable_pir(mqtt_global_cfg_t *myconf);
 
 /*
  *
- * usage: mqtt_rpi [config_file]
+ * usage: mqtt_rpi -c [config_file] -f -v -V
  */
 int
 main(int argc, char **argv)
 {
-	char *bufp;
+	char *bufp, *configfile = NULL;
 	int mqloopret=0;
+	int flags, opt;
 	struct rlimit lim;
 	pid_t	procpid;
 	bool first_run = true;
 	bool do_pool_sensors = true;
+	bool foreground_flg = false;
 
 	proc_command = false;
 	time(&Mosquitto.mqh_start_time);
@@ -160,9 +164,35 @@ main(int argc, char **argv)
 	lim.rlim_cur = RLIM_INFINITY;
 	lim.rlim_max = RLIM_INFINITY;
 	setrlimit(RLIMIT_CORE, &lim);
+	__PROGNAME = basename(argv[0]);
 
-	if ((main_loop = mqtt_rpi_init(argv[0], argv[1])) == false) {
-		fprintf(stderr, "%s: failed to init\n", __PROGNAME);
+	while((opt = getopt(argc, argv, "c:vVd:f")) != -1) {
+		switch(opt) {
+			case 'c':
+				configfile = strdup(optarg);
+				break;
+			case 'd':
+				break;
+			case 'v':
+				break;
+			case 'f':
+				foreground_flg=true;
+				break;
+			case 'V':
+				version();
+				exit(0);
+				break;
+			default:
+				usage();
+				exit(64);
+
+		}
+	}
+	argc-=optind;
+	argv+=optind;
+
+	if ((main_loop = mqtt_rpi_init(__PROGNAME, configfile)) == false) {
+		fprintf(stderr, "%s: failed to init with %s\n", __PROGNAME, configfile);
 		exit(3);
 	}
 	if (myMQTT_conf.sensors == NULL) {
@@ -176,7 +206,7 @@ main(int argc, char **argv)
 			exit(3);
 		}
 	}
-	if (myMQTT_conf.daemon) {
+	if (myMQTT_conf.daemon && ! foreground_flg) {
 		daemon(1, 0);
 		MQTT_log("Daemonizing!\n");
 	} else {
@@ -208,7 +238,9 @@ main(int argc, char **argv)
 				 */
 	}
 	if (startup_fanctl() == 0) {
-		MQTT_log("Startup of tip120");
+		MQTT_log("Startup of tip120.");
+	} else {
+		MQTT_log("TIP120 PWM disabled.");
 	}
 
 	if ((mqtt_connection = MQTT_init(&Mosquitto, false, (myMQTT_conf.identity == NULL?__PROGNAME:myMQTT_conf.identity))) == NULL) {
@@ -246,19 +278,19 @@ main(int argc, char **argv)
 					failure = 1;
 					break;
 			}
-			if (first_run) {
-				MQTT_pub(mqtt_connection, "/network/broadcast/mqtt_rpi", true, "on");
-				first_run = false;
-			}
-			if (got_SIGUSR1) {
-				MQTT_pub(mqtt_connection, "/network/broadcast/mqtt_rpi/user", false, "user_signal");
-				got_SIGUSR1 = 0;
-			}
-			if (got_SIGCHLD) {
-				waitpid(Mosquitto.mqh_mqttpir_pid, NULL, 0);
-				MQTT_log("got sigchld - mqttpir terminated!");
-				got_SIGCHLD = 0;
-			}
+		}
+		if (first_run && mqtt_connected) {
+			MQTT_pub(mqtt_connection, "/network/broadcast/mqtt_rpi", true, "on");
+			first_run = false;
+		}
+		if (got_SIGUSR1) {
+			MQTT_pub(mqtt_connection, "/network/broadcast/mqtt_rpi/user", false, "user_signal");
+			got_SIGUSR1 = 0;
+		}
+		if (got_SIGCHLD) {
+			waitpid(Mosquitto.mqh_mqttpir_pid, NULL, 0);
+			MQTT_log("got sigchld - mqttpir terminated!");
+			got_SIGCHLD = 0;
 		}
 
 		if (mqtt_conn_dead) {
@@ -276,11 +308,11 @@ main(int argc, char **argv)
 			main_loop = false;
 			fprintf(stderr, "%s) got SIGTERM\n", __PROGNAME);
 			got_SIGTERM = 0;
-			MQTT_pub(mqtt_connection, "/network/broadcast/mqtt", true, "off");
+			MQTT_pub(mqtt_connection, "/network/broadcast/mqtt_rpi", true, "off");
 		}
 		if (proc_command) {
 			proc_command = false;
-			MQTT_pub(mqtt_connection, "/network/broadcast", false, "%lu", Mosquitto.mqh_start_time);
+			MQTT_pub(mqtt_connection, "/network/broadcast/start_time", false, "%lu", Mosquitto.mqh_start_time);
 		}
 		if (do_pool_sensors) {
 			flash_led(NOTIFY_LED, HIGH);
@@ -307,12 +339,15 @@ main(int argc, char **argv)
 	}
 	MQTT_finish(&Mosquitto);
 	pidfile_remove(mr_pidfile);
-	fclose(logfile);
 	fanctl(FAN_OFF, NULL);
 	term_led_act(failure);
+	MQTT_log("Quitting");
 	if (shutdown_rpi) {
-		shutdown_linux();
+		MQTT_log("Calling shutdown of the machine");
+		fflush(logfile);
+		shutdown_linux("/sbin/halt");
 	}
+	fclose(logfile);
 	return (0);
 }
 
@@ -333,7 +368,8 @@ MQTT_loop(void *m, int tout)
 
 		switch (ret) {
 			case MOSQ_ERR_ERRNO:
-				if (errno == EHOSTUNREACH) {
+
+				if (errno == EHOSTUNREACH || errno == ENETUNREACH || errno == ENETRESET || errno == ENETDOWN || errno == ENOTCONN) {
 					mqtt_conn_dead = true;/* XXX temporal */
 					errno = 0;
 					MQTT_log("Connection lost. Reconnecting in a while...\n");
@@ -461,6 +497,12 @@ mqtt_proc_msg(char *topic, char *payload)
 				if (pstate == ST_CMDARGS && !strncasecmp(topics[n], "FAN", 3)) {
 					curcmd = CMD_FAN;
 					pstate = ST_DONE;
+				} else if (pstate == ST_CMDARGS && !strncasecmp(topics[n], "RELAY", 5)) {
+					curcmd = CMD_RELAY;
+					pstate = ST_DONE;
+				} else if (pstate == ST_CMDARGS && !strncasecmp(topics[n], "HALT", 4)) {
+					curcmd = CMD_HALT;
+					pstate = ST_DONE;
 				} else
 					pstate = ST_ERR;
 				break;
@@ -480,8 +522,12 @@ mqtt_proc_msg(char *topic, char *payload)
 			curcmd = CMD_STATS;
 		} else if (!strncasecmp(pbuf, "QUIT", 4)) {
 			curcmd = CMD_QUIT;
-		} else if (!strncasecmp(pbuf, "FAN", 4)) {
+		} else if (!strncasecmp(pbuf, "HALT", 4)) {
+			curcmd = CMD_HALT;
+		} else if (!strncasecmp(pbuf, "FAN", 3)) {
 			curcmd = CMD_FAN;
+		} else if (!strncasecmp(pbuf, "RELAY", 5)) {
+			curcmd = CMD_RELAY;
 		} else if (!strncasecmp(pbuf, "STAT_LED", 8)) {
 			curcmd = CMD_LED;
 		} else {
@@ -517,20 +563,38 @@ my_message_callback(struct mosquitto *mosq, void *userdata, const struct mosquit
 			case CMD_STATS:
 				proc_command = true;
 				break;
+			case CMD_HALT:
+				shutdown_rpi = true;
+				main_loop = false;
+				MQTT_printf("Shutdown triggered via MQTT\n");
+				break;
 			case CMD_QUIT:
 				main_loop = false;
 				break;
 			case CMD_FAN:
-				if (!strcasecmp(msg->payload, "FANON")) {
+				if (!strcasecmp(msg->payload, "on")) {
 					fanctl(FAN_ON, NULL);
 					MQTT_log( "DEBUG: Command Fan on %s/%s= %d\n", msg->topic, msg->payload, cmd);
-				} else if(!strcasecmp(msg->payload, "FANOFF")) {
+				} else if(!strcasecmp(msg->payload, "off")) {
 					fanctl(FAN_OFF, NULL);
 					MQTT_log( "DEBUG: Command fan off %s/%s= %d\n", msg->topic, msg->payload, cmd);
 				} else {
 					MQTT_log( "ERROR. Unknown command fan %s/%s= %d\n", msg->topic, msg->payload, cmd);
 				}
 				break;
+			case CMD_RELAY:
+				if (!strcasecmp(msg->payload, "on")) {
+					relay_ctl(1);
+					MQTT_log( "DEBUG: Command relay on %s/%s= %d\n", msg->topic, msg->payload, cmd);
+				}  else if(!strcasecmp(msg->payload, "off")) {
+					relay_ctl(0);
+					MQTT_log( "DEBUG: Command relay off %s/%s= %d\n", msg->topic, msg->payload, cmd);
+				} else {
+					MQTT_log( "ERROR. Unknown relay command %s/%s= %d\n", msg->topic, msg->payload, cmd);
+				}
+				break;
+			default:
+				MQTT_log("Command not handled. Internal error!");
  
 		}
 	}else {
@@ -589,7 +653,8 @@ MQTT_init(mqtt_hnd_t *m, bool c_sess, const char *id)
 
 	mosquitto_lib_init();
 	mosquitto_lib_version(&lv_major, &lv_minor, &lv_rev);
-	MQTT_log( "%s@%s libmosquitto %d.%d rev=%d\n", id, __HOSTNAME, lv_major, lv_minor, lv_rev);
+	MQTT_log( "Init %s %s@%s libmosquitto %d.%dr%d\n", __PROGNAME, id, __HOSTNAME, lv_major, lv_minor, lv_rev);
+	MQTT_log( "Compiled on %s %s\n", __DATE__, __TIME__);
 	MQTT_printf( "Init\t%s@%s libmosquitto %d.%d rev=%d\n", id, __HOSTNAME, lv_major, lv_minor, lv_rev);
 	strncpy(m->mqh_id, id, sizeof(m->mqh_id));
 	bzero(m->mqh_msgbuf, sizeof(m->mqh_msgbuf));
@@ -691,7 +756,7 @@ MQTT_sub(struct mosquitto *m, const char *fmt_topic, ...)
 
 
 static bool
-mqtt_rpi_init(const char *progname, char *conf)
+mqtt_rpi_init(const char *progname, const char *conf)
 {
 	bool   ret = true;
 	char  *configfile, *bufp, *p;
@@ -704,8 +769,7 @@ mqtt_rpi_init(const char *progname, char *conf)
 		__HOSTNAME = "nil";
 
 	/*p = basename(progname);*/
-	__PROGNAME = basename(progname);
-	configfile = ((conf != NULL)?conf:DEFAULT_CONFIG_FILE);
+	configfile = (char *) ((conf != NULL)?conf:DEFAULT_CONFIG_FILE);
 	if (parse_configfile(configfile, &myMQTT_conf) < 0) {
 		ret = false;
 		fprintf(stderr, "Failed to parse config file \"%s\"\n", configfile);
@@ -788,24 +852,33 @@ mqtt_pir_th_routine(void *pir_cnf)
 
 	cnf = (struct pir_config *) pir_cnf;
 	m = cnf->pir_mosq_connection;
-	pirpin = cnf->pir_pin;
-	ledpin = cnf->pir_led_pin;
-	pinMode(cnf->pir_pin, INPUT);
-	pinMode(cnf->pir_led_pin, OUTPUT); /* Pin 0? */
-	digitalWrite(cnf->pir_led_pin, HIGH);
+	pirpin = cnf->pir_gpio->g_pin;
+	if (cnf->pir_led_gpio != NULL)
+		ledpin = cnf->pir_led_gpio->g_pin;
+	else 
+		ledpin = -1;
+
+	pinMode(pirpin, INPUT);
+	if (ledpin > 0) {
+		pinMode(ledpin, OUTPUT); /* Pin 0? */
+		digitalWrite(ledpin, HIGH);
+	}
 
 	for (; ; ) {
 		for (tick = 0, positive=0; tick < 60; tick++) {
 			if ((val = digitalRead(pirpin)) == HIGH) {
 				positive++;
-				digitalWrite(ledpin, HIGH);
+				if (ledpin > 0)
+					digitalWrite(ledpin, HIGH);
 				actled = true;
 			} else if (actled == true) {
-				digitalWrite(ledpin, LOW);
+				if (ledpin > 0)
+					digitalWrite(ledpin, LOW);
 			}
 			usleep(1000000);
 			if (actled == true) {
-				digitalWrite(ledpin, LOW);
+				if (ledpin > 0)
+					digitalWrite(ledpin, LOW);
 				actled = false;
 			}
 		}
@@ -830,13 +903,14 @@ pool_sensors(struct mosquitto *mosq)
 	double value;
 	char	*endptr;
 	long pin;
+	bool 	sensor_ret = false;
 
 	sensor_t *sp;
 	sp = myMQTT_conf.sensors->sn_head;
 	do {
 		switch(sp->s_type) {
 			case SENS_W1:
-				value = get_temperature(sp->s_address);
+				sensor_ret = get_temperature(sp->s_address, &value);
 				break;
 			case SENS_I2C:
 				switch(sp->s_i2ctype) {
@@ -850,7 +924,10 @@ pool_sensors(struct mosquitto *mosq)
 				break;
 
 		}
-		if (MQTT_pub(mosq, sp->s_channel, false, "%f", value) < 0) {
+		if (sensor_ret == true ) {
+			MQTT_pub(mosq, sp->s_channel, false, "%f", value);
+		} else {
+			MQTT_log("%s query failure\n", sp->s_name);
 			return(-1);
 		}
 		sp = sp->s_next;
@@ -862,8 +939,8 @@ pool_sensors(struct mosquitto *mosq)
 /*
  *
  * struct pir_config {
- *	unsigned int	pir_pin;
- *	unsigned int	pir_led_pin;
+ *	gpio_t 		*pir_gpio;
+ *	gpio_t 		*pir_led_gpio;
  *	char		*pir_mqtt_topic;
  *	struct mosquitto *pir_mosq_connection;
  * };
@@ -873,30 +950,28 @@ static bool
 enable_pir(mqtt_global_cfg_t *myconf)
 {
 	struct pir_config *pir;
-	gpio_t	*g;
 
 	if (myconf->gpios == NULL)  {
 		MQTT_printf("GPIOs not configured\n");
 		return (false);
 	}
-	if ((g = gpiopin_by_type(myconf->gpios, G_PIR_SENSOR, NULL)) == NULL) {
-		MQTT_printf("PIR_SENSOR configuration is missing\n");
-		return (false);
-	}
 	pir = malloc(sizeof(struct pir_config));
-	pir->pir_pin = g->g_pin;
-	if (g->g_topic == NULL) {
-		MQTT_printf("You must specify a topic to publish in\n");
+
+	if ((pir->pir_gpio = gpiopin_by_type(myconf->gpios, G_PIR_SENSOR, NULL)) == NULL) {
+		MQTT_log("PIR_SENSOR configuration is missing\n");
 		return (false);
 	}
-	pir->pir_mqtt_topic = strdup(g->g_topic);
+	if (pir->pir_gpio->g_topic == NULL) {
+		MQTT_log("You must specify a topic to publish in\n");
+		return (false);
+	}
+
+	pir->pir_mqtt_topic = strdup(pir->pir_gpio->g_topic);
 	pir->pir_mosq_connection = mqtt_connection;
 
-	if ((g = gpiopin_by_type(myconf->gpios, G_LED_FAILURE, NULL)) == NULL) {
-		MQTT_printf("G_LED_FAILURE not configured\n");
-		return (false);
+	if ((pir->pir_led_gpio = gpiopin_by_type(myconf->gpios, G_LED_FAILURE, NULL)) == NULL) {
+		MQTT_log("G_LED_FAILURE (which is used by pir to report activity is not configured\n");
 	}
-	pir->pir_led_pin = g->g_pin;
 	fork_mqtt_pir(pir);
 	return (true);
 	
@@ -1020,12 +1095,12 @@ MQTT_printf(const char *fmt, ...)
 }
 
 static void 
-shutdown_linux(void)
+shutdown_linux(const char *halt_path)
 {
 	switch(fork()) {
 		case 0:
-			execlp("/sbin/halt", "/sbin/halt", "-p", NULL);
-			MQTT_printf("execlp error %s\n", strerror(errno));
+			execlp(halt_path, halt_path, "-p", NULL);
+			MQTT_printf("execlp error when executing halt (%s) %s\n", halt_path, strerror(errno));
 			exit(3);
 			break;
 		case -1:
@@ -1035,6 +1110,39 @@ shutdown_linux(void)
 			MQTT_printf("Executed halt command\n");
 	}
 	return;
+}
+static void
+version(void)
+{
+	fprintf(stderr, "%s Compiled with gcc %s on %s %s\n", __PROGNAME, __VERSION__, __DATE__, __TIME__);
+#ifdef MQTTDEBUG
+	fprintf(stderr, "\tMQTTDEBUG\t- enabled\n");
+#else
+	fprintf(stderr, "\tMQTTDEBUG\t- disabled\n");
+#endif
+#ifdef PTHREAD_PIR
+	fprintf(stderr, "\tPTHREAD_PIR\t- enabled\n");
+#else
+	fprintf(stderr, "\tPTHREAD_PIR\t- disabled\n");
+#endif
+#ifdef __OPTIMIZE__
+	fprintf(stderr, "\tOptimized\n");
+#endif
+#ifdef PARSER_DEBUG
+	fprintf(stderr, "\tPARSER_DEBUG\t- enabled\n");
+#else
+	fprintf(stderr, "\tPARSER_DEBUG\t- disabled\n");
+#endif
+
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+        printf("\tbyte order=LITTLE_ENDIAN\n");
+#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+        printf("\tbyte order=BIG_ENDIAN\n");
+#endif
+#ifdef __ELF__
+	fprintf(stderr, "\telf binary\n");
+#endif
+
 }
 
 static void

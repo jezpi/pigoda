@@ -20,6 +20,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <unistd.h>
 
 #include <wiringPi.h>
@@ -34,6 +35,7 @@
 #include "bmp85/bmp85.h"
 
 #define W1_DEVS_PATH "/sys/bus/w1/devices/"
+extern int MQTT_log(const char *, ...);
 
 int 
 sensors_init(sensors_t *sn) 
@@ -44,6 +46,7 @@ sensors_init(sensors_t *sn)
 	int 		scnf = 0;
 
 	wiringPiSetup();
+	mcp23017Setup (300, 0x24) ;
 	sp = sn->sn_head;
 	do {
 		if (sp->s_st != SENS_INIT || (sp->s_type == SENS_I2C && sn->sn_adc_configured > 0)) {
@@ -123,22 +126,21 @@ getraw(const char *devpath)
 	return (tempstr);
 }
 
-float
-get_temperature(const char *ds_name)
+bool
+get_temperature(const char *ds_name, double *temp)
 {
 	char	pathbuf[BUFSIZ];
 	char *eptr, *chp;
-	float	temp;
 
 	snprintf(pathbuf, sizeof pathbuf, "/sys/bus/w1/devices/%s/w1_slave", ds_name);
 	if ((chp = getraw(pathbuf)) == NULL) {
-		fprintf(stderr, "failed to read %s %s\n", pathbuf, strerror(errno));
-		return (-1);
+		MQTT_log("Failed to read %s %s\n", pathbuf, strerror(errno));
+		return (false);
 	}
 	
 
-	temp = (float) ((float)strtol(chp,  &eptr, 10)/1000.00);
-	return (temp);
+	*temp = (double) ((double)strtol(chp,  &eptr, 10)/1000.00);
+	return (true);
 
 }
 
