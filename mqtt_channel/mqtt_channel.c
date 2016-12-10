@@ -178,17 +178,20 @@ struct ts_MQTT {
 
 #include "mqtt_cmd.h"
 
-static mqtt_hnd_t Mosquitto;
-static FILE *logfile;
-const char *__PROGNAME;
-const char *__HOSTNAME;
-mqtt_global_cfg_t	myMQTT_conf;
-static bool proc_command;
-static volatile bool main_loop;
-static sig_atomic_t unknown_signal;
-static sig_atomic_t got_SIGUSR1;
-static sig_atomic_t got_SIGTERM;
-static MQTT_db_t    *sqlitedb;
+static mqtt_hnd_t 	 Mosquitto;
+mqtt_global_cfg_t	 myMQTT_conf;
+static bool 		 proc_command;
+static volatile bool 	 main_loop;
+static sig_atomic_t 	 unknown_signal;
+static sig_atomic_t 	 got_SIGUSR1;
+static sig_atomic_t 	 got_SIGTERM;
+static bool 		 mqtt_conn_dead = false;
+extern bool 		 sqlite3_dont_store ;
+static FILE 		*logfile;
+const char 		*__PROGNAME;
+const char 		*__HOSTNAME;
+static MQTT_db_t    	*sqlitedb;
+static char 		*path_config_file;
 
 static void my_publish_callback(struct mosquitto *, void *, int);
 static void my_subscribe_callback(struct mosquitto *, void *, int, int, const int *);
@@ -217,8 +220,8 @@ static int MQTT_to_ts(struct ts_MQTT *, MQTT_data_type_t type, float value);
 static struct ts_MQTT * MQTT_to_ts_init(const char *apikey, int channel);
 #endif /* ! THINGSPEAK */
 
-static bool mqtt_conn_dead = false;
 
+static bool mqtt_rpi_init(const char *progname, char *conf);
 
 
 
@@ -233,7 +236,6 @@ static void usage(void);
 
 
 static void siginfo(int signo, siginfo_t *info, void *context);
-static bool mqtt_rpi_init(const char *progname, char *conf);
 /*
  * Application used to collect and store information from various MQTT channels
  *
@@ -250,26 +252,45 @@ main(int argc, char **argv)
 	struct mosquitto *mosq;
 	bool first_run = true;
 	int mqloopret=0;
+	int ch;
 
 	proc_command = false;
 	time(&Mosquitto.mqh_start_time);
+	while ((ch = getopt(argc, argv, "S")) != -1) {
+		switch (ch) {
+			case 'S':
+				sqlite3_dont_store = true;
+				break;
+			case 'c':
+				path_config_file = strdup(optarg);
+				break;
+			default:
+				usage();
+				exit(64);
+		}
+	}
 
-	if ((main_loop = mqtt_rpi_init(argv[0], argv[1])) == false) {
+	if ((main_loop = mqtt_rpi_init(argv[0], path_config_file)) == false) {
 		fprintf(stderr, "%s: failed to init\n", __PROGNAME);
 		exit(3);
 	}
 
-
+#ifdef NCURSES
+	init_screen(&screen_data);
+#endif /* ! NCURSES */
 	if ((mosq = MQTT_init(&Mosquitto, false, (myMQTT_conf.identity == NULL?__PROGNAME:myMQTT_conf.identity))) == NULL) {
 		fprintf(stderr, "%s: failed to init MQTT protocol \n", __PROGNAME);
 		exit(3);
 
 	}
-	sqlitedb = MQTT_initdb((myMQTT_conf.sqlite3_db == NULL?"/var/db/pigoda/sensors.db":myMQTT_conf.sqlite3_db));
 
-#ifdef NCURSES
-	init_screen(&screen_data);
-#endif /* ! NCURSES */
+	if (!sqlite3_dont_store)
+		sqlitedb = MQTT_initdb(
+			(myMQTT_conf.sqlite3_db == NULL?"/var/db/pigoda/sensors.db":myMQTT_conf.sqlite3_db)
+		);
+	else
+		MQTT_log("Not storing to sqlite3 DB\n");
+
 #ifdef THINGSPEAK
 	TSMQTT = MQTT_to_ts_init("YLW6C8UWBXKWMEXZ", 10709);
 #endif
@@ -321,7 +342,8 @@ main(int argc, char **argv)
 #endif
 	  	usleep(155000);
 	}
-	MQTT_detachdb(sqlitedb);
+	if (!sqlite3_dont_store)
+		MQTT_detachdb(sqlitedb);
 	MQTT_printf("End of work");
 	MQTT_finish(&Mosquitto);
 	fclose(logfile);
@@ -569,7 +591,8 @@ my_message_callback(struct mosquitto *mosq, void *userdata, const struct mosquit
 			val = atof((char *)msg->payload);
 			if ((sp = scr_stat_find(&screen_data, dataf)) == NULL) {
 				sp = scr_stat_new(&screen_data, dataf, val);
-				MQTT_createtable(sqlitedb, dataf);
+				if (!sqlite3_dont_store)
+					MQTT_createtable(sqlitedb, dataf);
 			} else {
 				sp->ss_value = val;
 			}
@@ -578,11 +601,13 @@ my_message_callback(struct mosquitto *mosq, void *userdata, const struct mosquit
 				MQTT_printf("Not updating. Duplicated data on %s\n", sp->ss_name);
 			} else {
 				sp->ss_lastupdate = curtim;
-				if (MQTT_poli_store(sqlitedb, dataf, val) != 0) {
-					MQTT_log("Store failure\n");
-					sp->ss_err_sqlite++;
-				} else {
-					sp->ss_store_sqlite++;
+				if (!sqlite3_dont_store) {
+					if (MQTT_poli_store(sqlitedb, dataf, val) != 0) {
+						MQTT_log("Store failure\n");
+						sp->ss_err_sqlite++;
+					} else {
+						sp->ss_store_sqlite++;
+					}
 				}
 			}
 		}
@@ -712,8 +737,16 @@ my_connect_callback(struct mosquitto *mosq, void *userdata, int result)
 		/* Subscribe to broker information topics on successful connect. */
 		/*  /mosquitto_subscribe(mosq, NULL, "/#", 0);*/
 		/*mosquitto_subscribe(mosq, NULL, "/network/stations", 0);*/
-		MQTT_log("Connected sucessfully %s as %s\n", myMQTT_conf.mqtt_host, myMQTT_conf.mqtt_user);
-		MQTT_printf("Connected sucessfully %s as %s\n", myMQTT_conf.mqtt_host, myMQTT_conf.mqtt_user);
+		MQTT_log("Connected sucessfully %s as %s\n", 
+				myMQTT_conf.mqtt_host, 
+				myMQTT_conf.mqtt_user);
+		MQTT_printf("Connected sucessfully to %s as \"%s\":%s. %s %s\n", 
+				myMQTT_conf.mqtt_host, 
+				myMQTT_conf.mqtt_user,
+				myMQTT_conf.identity,
+				(sqlite3_dont_store?" Not collecting to DB!":"DB file:"),
+				((sqlite3_dont_store == false)?myMQTT_conf.sqlite3_db:"")
+				);
 	} else {
 		switch (result) {
 			case CONNACK_REFUSED_PROTOCOL_VERSION:
@@ -748,7 +781,7 @@ MQTT_init(mqtt_hnd_t *m, bool c_sess, const char *id)
 
 	mosquitto_lib_init();
 	mosquitto_lib_version(&lv_major, &lv_minor, &lv_rev);
-	MQTT_printf( "%s@%s libmosquitto %d.%d rev=%d\n", id, __HOSTNAME, lv_major, lv_minor, lv_rev);
+	MQTT_log( "%s@%s libmosquitto %d.%d rev=%d\n", id, __HOSTNAME, lv_major, lv_minor, lv_rev);
 
 	strncpy(m->mqh_id, id, sizeof(m->mqh_id));
 	bzero(m->mqh_msgbuf, sizeof(m->mqh_msgbuf));
@@ -1031,6 +1064,7 @@ siginfo(int signo, siginfo_t *info, void *context)
 	return ;
 }
 
+/* Log message into the log file */
 int
 MQTT_log(const char *fmt, ...)
 {
