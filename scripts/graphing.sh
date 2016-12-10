@@ -27,7 +27,7 @@ IFS=$oIFS
 
 graph_micguernilaptop () {
 	name=micguernilaptop
-	rrd_graph_def ${RRD_GRAPH_PATH}/${name}.png \
+	rrd_graph_def ${PNG_GRAPH_PATH}/${name}.png \
 		-w 785 -h 120 -a PNG \
 		--slope-mode \
 		--start 'now-3h' --end 'now-60s' \
@@ -50,10 +50,10 @@ graph_micguernilaptop () {
 graph_unknown () {
 	name=$1
 	echo "=> Creating png graph - $name"
-	rrd_graph_def ${RRD_GRAPH_PATH}/${name}.png \
+	rrd_graph_def ${PNG_GRAPH_PATH}/${name}.png \
 		-w 785 -h 160 -a PNG \
 		--slope-mode \
-		--start 'now-3h' --end 'now-60s' \
+		--start 'now-3h' --end 'now-300s' \
 		--title="${name} sensor stats " \
 		--watermark="Date `date`" \
 		--alt-y-grid \
@@ -77,13 +77,72 @@ graph_unknown () {
 
 }
 
+graph_unknown_wkly () {
+	name=$1
+	echo "=> Creating weekly png graph - \"$name\""
+	rrd_graph_def ${PNG_GRAPH_PATH}/${name}_weekly.png \
+		-w 785 -h 160 -a PNG \
+		--slope-mode \
+		--start 'now-7d' --end 'now-300s' \
+		--title="${name} sensor stats " \
+		--watermark="Date `date`" \
+		--alt-y-grid \
+		--alt-autoscale \
+		--graph-render-mode=normal \
+		--grid-dash=1:3 \
+		--border=0 \
+		DEF:uval=${RRD_DB_PATH}/${name}.rrd:${name}:AVERAGE \
+		VDEF:uvalavg=uval,AVERAGE \
+		VDEF:uvalmin=uval,MINIMUM \
+		VDEF:uvallast=uval,LAST \
+		VDEF:uvalmax=uval,MAXIMUM \
+		AREA:uval#988FDC:"Values\t" \
+		LINE1:uvallast#A50004:"Last value\t":dashes \
+		LINE1:uvalmin#FFD63F:"min value\t":dashes \
+		LINE1:uvalmax#12B209:"max value\n":dashes \
+		GPRINT:uval:AVERAGE:"Avg\:  %5.2lf\n"  \
+		GPRINT:uval:LAST:"Last\: %5.2lf\n" \
+		GPRINT:uval:MIN:"Min\:  %5.2lf\n" \
+		GPRINT:uval:MAX:"Max\:  %5.2lf\n" 
+
+}
+
+graph_unknown_mly () {
+	name=$1
+	echo "=> Creating monthly png graph - \"${name}_montly.png\""
+	rrd_graph_def ${PNG_GRAPH_PATH}/${name}_monthly.png \
+		-w 785 -h 160 -a PNG \
+		--slope-mode \
+		--start 'now-30d' --end 'now-300s' \
+		--title="${name} sensor stats " \
+		--watermark="Date `date`" \
+		--alt-y-grid \
+		--alt-autoscale \
+		--graph-render-mode=normal \
+		--grid-dash=1:3 \
+		--border=0 \
+		DEF:uval=${RRD_DB_PATH}/${name}.rrd:${name}:AVERAGE \
+		VDEF:uvalavg=uval,AVERAGE \
+		VDEF:uvalmin=uval,MINIMUM \
+		VDEF:uvallast=uval,LAST \
+		VDEF:uvalmax=uval,MAXIMUM \
+		AREA:uval#988FDC:"Values\t" \
+		LINE1:uvallast#A50004:"Last value\t":dashes \
+		LINE1:uvalmin#FFD63F:"min value\t":dashes \
+		LINE1:uvalmax#12B209:"max value\n":dashes \
+		GPRINT:uval:AVERAGE:"Avg\:  %5.2lf\n"  \
+		GPRINT:uval:LAST:"Last\: %5.2lf\n" \
+		GPRINT:uval:MIN:"Min\:  %5.2lf\n" \
+		GPRINT:uval:MAX:"Max\:  %5.2lf\n"  > /dev/null 2>&1
+
+}
+
 graph_pir() {
 echo "=> Creating png graph - pir on badacz"
-	rrd_graph_def ${RRD_GRAPH_PATH}/pir.png \
+	rrd_graph_def ${PNG_GRAPH_PATH}/pir.png \
 		-w 785 -h 120 -a PNG \
 		--slope-mode \
-		--start 'now-12h' --end now \
-		--font='DEFAULT:7:' \
+		--start 'now-12h' --end 'now-300s' \
 		--title="PIR sensor stats - movement rate in one second" \
 		--lower-limit 0 \
 		--upper-limit 1 \
@@ -95,10 +154,10 @@ echo "=> Creating png graph - pir on badacz"
 		VDEF:movmmax=movm,MAXIMUM \
 		VDEF:movmmin=movm,MINIMUM \
 		VDEF:movmlast=movm,LAST \
-		AREA:movm#0000FF:"Movement rate\t" \
-		LINE1:movmlast#FF00FF:"Average movement rate\t":dashes \
-		LINE1:movmmax#F000FF:"Average movement rate\t":dashes \
-		LINE1:movmmin#FA00FF:"Average movement rate\n":dashes \
+		AREA:movm#FFC305:"Movement rate\t" \
+		LINE1:movmlast#C70039:"Last movement rate\t":dashes \
+		LINE2:movmmax#FF5733:"Max movement rate\t" \
+		LINE1:movmmin#581845:"Min movement rate\n":dashes \
 		GPRINT:movm:AVERAGE:"Avg\: %5.2lf\n" \
 		GPRINT:movm:MAX:"Max\: %5.2lf\n" \
 		GPRINT:movm:MIN:"Min\: %5.2lf\n" \
@@ -109,14 +168,13 @@ echo "=> Creating png graph - pir on badacz"
 graph_humidity () {
 	echo "=> Creating png graph - humidity on rpitrois in l24"
 
-	rrd_graph_def ${RRD_GRAPH_PATH}/humidity.png \
+	rrd_graph_def ${PNG_GRAPH_PATH}/humidity.png \
 		-w 785 -h 120 -a PNG \
 		--slope-mode \
 		--start 'now-3h' --end now \
 		--title="Humidity L24" \
 		--watermark="Date `date`" \
 		--alt-y-grid \
-		--vertical-label '%' \
 		--lower-limit 0 \
 		--upper-limit 100 \
 		--rigid \
@@ -135,7 +193,7 @@ graph_humidity () {
 
 graph_tempin() {
 echo "=> Creating png graph - tempin on badacz in made"
-	rrd_graph_def ${RRD_GRAPH_PATH}/tempin.png \
+	rrd_graph_def ${PNG_GRAPH_PATH}/tempin.png \
 		-w 785 -h 120 -a PNG \
 		--slope-mode \
 		--alt-autoscale \
@@ -158,7 +216,7 @@ echo "=> Creating png graph - tempin on badacz in made"
 
 graph_tempin_guerni() {
 echo "=> Creating png graph - temperature in guerni"
-	rrd_graph_def ${RRD_GRAPH_PATH}/tempin_guerni.png \
+	rrd_graph_def ${PNG_GRAPH_PATH}/tempin_guerni.png \
 		-w 785 -h 180 -a PNG \
 		--slope-mode \
 		--start 'now-12h' --end 'now' \
@@ -181,11 +239,10 @@ echo "=> Creating png graph - temperature in guerni"
 
 graph_tempin_weekly() {
 echo "=> Creating png graph - temperature inside in guerni"
-	rrd_graph_def ${RRD_GRAPH_PATH}/tempin_weekly.png \
+	rrd_graph_def ${PNG_GRAPH_PATH}/tempin_weekly.png \
 		-w 785 -h 120 -a PNG \
 		--slope-mode \
 		--start 'now-14d' --end now \
-		--font='DEFAULT:7:' \
 		--title="Temperature inside - past 14 days" \
 		--watermark="Date `date`" \
 		--alt-y-grid \
@@ -201,7 +258,7 @@ echo "=> Creating png graph - temperature inside in guerni"
 
 graph_vc_temp_badacz() {
 	echo "=> Creating png graph - vc_temp"
-	rrd_graph_def ${RRD_GRAPH_PATH}/vc_temp_badacz.png \
+	rrd_graph_def ${PNG_GRAPH_PATH}/vc_temp_badacz.png \
 		-w 785 -h 120 -a PNG \
 		--slope-mode \
 		--start 'now-3h' --end now \
@@ -220,7 +277,7 @@ graph_vc_temp_badacz() {
 
 graph_vc_temp_badacz_weekly() {
 	echo "=> Creating png graph - vc_temp"
-	rrd_graph_def ${RRD_GRAPH_PATH}/vc_temp_badacz_weekly.png \
+	rrd_graph_def ${PNG_GRAPH_PATH}/vc_temp_badacz_weekly.png \
 		-w 785 -h 120 -a PNG \
 		--slope-mode \
 		--start 'now-7d' --end now \
@@ -242,7 +299,7 @@ graph_vc_temp_badacz_weekly() {
 
 graph_temprel_custom() {
 echo "=> Creating png graph - temperature relation"
-rrd_graph_def ${RRD_GRAPH_PATH}/temp_rel.png \
+rrd_graph_def ${PNG_GRAPH_PATH}/temp_rel.png \
 	-w 785 -h 420 -a PNG \
 	--slope-mode \
 	--start 'now-92h' --end now \
@@ -280,7 +337,7 @@ rrd_graph_def ${RRD_GRAPH_PATH}/temp_rel.png \
 
 graph_vc_temp_badacz_daily () {
 echo "=> Creating png graph - vc_temp"
-rrd_graph_def ${RRD_GRAPH_PATH}/vc_temp_badacz_daily.png \
+rrd_graph_def ${PNG_GRAPH_PATH}/vc_temp_badacz_daily.png \
 	-w 785 -h 120 -a PNG \
 	--slope-mode \
 	--start 'now-24h' --end now \
@@ -300,7 +357,7 @@ rrd_graph_def ${RRD_GRAPH_PATH}/vc_temp_badacz_daily.png \
 graph_light () {
 
 echo "=> Creating png graph - light in made"
-rrd_graph_def ${RRD_GRAPH_PATH}/light.png \
+rrd_graph_def ${PNG_GRAPH_PATH}/light.png \
 	-w 785 -h 120 -a PNG \
 	--slope-mode \
 	--start 'now-3h' --end 'now-60s' \
@@ -319,7 +376,7 @@ rrd_graph_def ${RRD_GRAPH_PATH}/light.png \
 
 graph_light_daily () {
 echo "=> Creating png graph - light daily"
-rrd_graph_def ${RRD_GRAPH_PATH}/light_daily.png \
+rrd_graph_def ${PNG_GRAPH_PATH}/light_daily.png \
 	-w 785 -h 120 -a PNG \
 	--slope-mode \
 	--start 'now-1d' --end now \
@@ -338,7 +395,7 @@ rrd_graph_def ${RRD_GRAPH_PATH}/light_daily.png \
 graph_light_weekly () {
 
 echo "=> Creating png graph - light weekly"
-rrd_graph_def ${RRD_GRAPH_PATH}/light_weekly.png \
+rrd_graph_def ${PNG_GRAPH_PATH}/light_weekly.png \
 	-w 785 -h 120 -a PNG \
 	--slope-mode \
 	--start 'now-7d' --end now \
@@ -358,17 +415,23 @@ rrd_graph_def ${RRD_GRAPH_PATH}/light_weekly.png \
 
 graph_tempout() {
 echo "=> Creating png graph - tempout"
-	rrd_graph_def ${RRD_GRAPH_PATH}/tempout.png \
-	-w 785 -h 120 -a PNG \
+	rrd_graph_def ${PNG_GRAPH_PATH}/tempout.png \
+	-w 785 -h 150 -a PNG \
 	--slope-mode \
-	--start 'now-3h' --end now \
-	--font='DEFAULT:7:' \
-	--title="Outside temperature past 3 hours" \
+	--upper-limit 20 \
+	--lower-limit 15 \
+	--start 'now-3h' --end 'now-600s' \
+	--title="Temperature in made. Past 3 hours" \
 	--watermark="Date `date`" \
-	--alt-y-grid \
 	--rigid \
 	DEF:tempout=${RRD_DB_PATH}/tempout.rrd:tempout:AVERAGE \
-	AREA:tempout#EF500B:"temp(C)\n" \
+	VDEF:tempoutlast=tempout,LAST \
+	VDEF:tempoutmin=tempout,MINIMUM \
+	VDEF:tempoutmax=tempout,MAXIMUM \
+	AREA:tempoutlast#01295F:"temperature last\t"\
+	AREA:tempout#FFC300:"temp(C)\t" \
+	LINE1:tempoutmin#9B1D20:"temperature min\t":dashes \
+	LINE2:tempoutmax#E53100:"temperature max\n" \
 	GPRINT:tempout:MAX:" Max\: %5.2lf \n" \
 	GPRINT:tempout:AVERAGE:" Avg\: %5.2lf \n" \
 	GPRINT:tempout:MIN:" Min\: %5.2lf\n" \
@@ -377,11 +440,10 @@ echo "=> Creating png graph - tempout"
 
 graph_tempout_weekly() {
 echo "=> Creating png graph - tempout"
-rrd_graph_def ${RRD_GRAPH_PATH}/tempout_weekly.png \
+rrd_graph_def ${PNG_GRAPH_PATH}/tempout_weekly.png \
 -w 785 -h 120 -a PNG \
 --slope-mode \
 --start now-7d --end now \
---font='DEFAULT:7:' \
 --title="Outside temperature past few days" \
 --watermark="Date `date`" \
 --alt-y-grid \
@@ -397,11 +459,10 @@ GPRINT:tempout:LAST:"Last\: %5.2lf\n"
 
 graph_pressure() {
 echo "=> Creating png graph - pressure"
-rrd_graph_def ${RRD_GRAPH_PATH}/pressure.png \
+rrd_graph_def ${PNG_GRAPH_PATH}/pressure.png \
 -w 785 -h 120 -a PNG \
 --slope-mode \
 --start 'now-1d' --end 'now-600s' \
---font='DEFAULT:7:' \
 --title="Pressure" \
 --watermark="Date `date`" \
 --alt-y-grid \
@@ -425,11 +486,10 @@ graph_pressure_daily() {
 	graph_name=${FUNCNAME##graph_}
 	dta_name=${graph_name%%_daily}
 echo "=> Creating png graph - $dta_name daily"
-rrd_graph_def ${RRD_GRAPH_PATH}/${graph_name}.png \
+rrd_graph_def ${PNG_GRAPH_PATH}/${graph_name}.png \
 -w 785 -h 120 -a PNG \
 --slope-mode \
 --start 'now-24h' --end now \
---font='DEFAULT:7:' \
 --title="Pressure daily" \
 --alt-autoscale \
 --watermark="Date `date`" \
@@ -453,7 +513,7 @@ graph_pressure_weekly() {
 	graph_name=${FUNCNAME##graph_}
 	dta_name=${graph_name%%_weekly}
 echo "=> Creating png graph - $dta_name weekly"
-rrd_graph_def ${RRD_GRAPH_PATH}/${graph_name}.png \
+rrd_graph_def ${PNG_GRAPH_PATH}/${graph_name}.png \
 -w 785 -h 120 -a PNG \
 --slope-mode \
 --start 'now-7d' --end now \
@@ -481,7 +541,7 @@ GPRINT:pressure:AVERAGE:"Avg\: %5.2lf\n"
 
 graph_mic_guerni() {
 echo "=> Creating png graph - microphone in guerni connected to rpi"
-rrd_graph_def ${RRD_GRAPH_PATH}/mic_guerni.png \
+rrd_graph_def ${PNG_GRAPH_PATH}/mic_guerni.png \
 -w 785 -h 120 -a PNG \
 --slope-mode \
 --start 'now-1h' --end 'now' \
@@ -506,7 +566,7 @@ GPRINT:mic:AVERAGE:"Avg\: %5.2lf\n"
 
 graph_micmade() {
 echo "=> Creating png graph - microphone in made on my laptop "
-rrd_graph_def ${RRD_GRAPH_PATH}/micmade.png \
+rrd_graph_def ${PNG_GRAPH_PATH}/micmade.png \
 -w 785 -h 120 -a PNG \
 --slope-mode \
 --start 'now-2h' --end 'now-60s' \
@@ -542,8 +602,16 @@ update_graphs () {
 	fi
 }
 
+usage() {
+	echo "graphing.sh commands: [custom|everything_daily|everything_monthly|everything|weekly|daily] [ddname]"
+}
+
+######################################
+# main
+#############
+
 if [ -z ${1}  ]; then
-	echo "$0 commands: [exp|everything]"
+	usage;
 	exit 64;
 fi
 
@@ -553,14 +621,51 @@ do
 		exp)
 			echo "obsolete!"
 			;;
-		daily|weekly)
-			graph_vc_temp_daily
-			graph_pressure_daily;
+		everything_monthly)
+			echo "Creating \"${PNG_GRAPH_PATH}/graphs_monthly.html\""
+			:> ${PNG_GRAPH_PATH}/graphs_monthly.html
+			for t in $(sqlite3 /var/db/pigoda/sensorsv2.db '.tables'); 
+			do 
+				
+				echo $t; 
+				printf '<img src="./%s_monthly.png" />\n' "${t}" >> ${PNG_GRAPH_PATH}/graphs_monthly.html
+				update_graphs $t > /dev/null
+				eval graph_${t}_monthly > /dev/null 2>&1
+				if [ $? -ne 0 ]; then
+					echo "!> Weekly graphs not available for ${t}"
+					#echo "!> graph failure. Trying to graph by anonymously"
+					graph_unknown_mly ${t}
+				fi
+			done
+			;;
+
+		everything_weekly)
+			echo "Creating \"${PNG_GRAPH_PATH}/graphs_weekly.html\""
+			:> ${PNG_GRAPH_PATH}/graphs_weekly.html
+			for t in $(sqlite3 /var/db/pigoda/sensorsv2.db '.tables'); 
+			do 
+				
+				echo $t; 
+				printf '<img src="./%s_weekly.png" />\n' "${t}" >> ${PNG_GRAPH_PATH}/graphs_weekly.html
+				update_graphs $t > /dev/null
+				eval graph_${t}_weekly > /dev/null 2>&1
+				if [ $? -ne 0 ]; then
+					echo "!> Weekly graphs not available for ${t}"
+					#echo "!> graph failure. Trying to graph by anonymously"
+					graph_unknown_wkly ${t}
+				fi
+			done
+			;;
+		weekly)
 			graph_tempout_weekly
 			graph_tempin_weekly;
 			graph_light_weekly;
+			graph_vc_temp_badacz_weekly;
+			;;
+		daily)
 
-			:> /var/www/default/mq_graphs/graphs_daily.html
+			graph_pressure_daily;
+			:> ${PNG_GRAPH_PATH}/graphs_daily.html
 			for t in $(sqlite3 /var/db/pigoda/sensorsv2.db '.tables'); 
 			do 
 				
@@ -570,7 +675,7 @@ do
 				if [ $? -ne 0 ]; then
 					echo "!> daily graph failure."
 				else
-					printf '<img src="./%s_daily.png" />\n' "${t}" >> /var/www/default/mq_graphs/graphs_daily.html
+					printf '<img src="./%s_daily.png" />\n' "${t}" >> ${PNG_GRAPH_PATH}/graphs_daily.html
 				fi
 			done
 
@@ -579,12 +684,12 @@ do
 			graph_temprel_custom;
 			;;
 		everything)
-			:> /var/www/default/mq_graphs/graphs.html
+			:> ${PNG_GRAPH_PATH}/graphs_auto.html
 			for t in $(sqlite3 /var/db/pigoda/sensorsv2.db '.tables'); 
 			do 
 				
 				echo $t; 
-				printf '<img src="./%s.png" />\n' "${t}" >> /var/www/default/mq_graphs/graphs.html
+				printf '<img src="./%s.png" />\n' "${t}" >> ${PNG_GRAPH_PATH}/graphs_auto.html
 				update_graphs $t;
 				eval graph_$t
 				if [ $? -ne 0 ]; then
@@ -609,7 +714,7 @@ do
 				
 			;;
 		help)
-			echo "$0 commands: [exp|everything]"
+			usage
 			exit 64;
 			;;
 	esac
