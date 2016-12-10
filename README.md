@@ -15,7 +15,10 @@ a mosquitto server which broadcasts information on a configured channel.
 ### mqtt_rpi
 #### Introduction
 
-mqtt_rpi is 
+mqtt_rpi is a broker client as all software pieces written here.
+         it sends statistics from previously configured gpios/i2c devices
+	 to specified in a config file *mqtt_rpi.yaml* MQTT channels.
+	   
 #### Status:
 Ready to use version is available. However it's missing some documentation
 
@@ -84,4 +87,6 @@ the code needs to be polished a bit)
 In a directory eagle of github repository there are available boards designs ready to fabricate.
 The width of connections is thick on purpose. More information will be available soon.
 
-
+## Notes
+It takes 58seconds to start rpi
+350mA while it's running and ~400mA on a startup
