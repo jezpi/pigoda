@@ -1,4 +1,6 @@
+
 #include <stdio.h>
+#include <stdbool.h>
 #include <unistd.h>
 #include <sqlite3.h>
 #include <stdlib.h>
@@ -9,6 +11,7 @@
 /* sourced from mqtt_channel.c */
 extern int MQTT_printf(const char *, ...);
 extern int MQTT_log(const char *, ...);
+bool 		 sqlite3_dont_store = false;
 
 MQTT_db_t *
 MQTT_initdb(const char *path) {

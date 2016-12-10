@@ -15,5 +15,6 @@ extern int startup_led_act(int, int);
 extern int term_led_act(short) ;
 extern int flash_led(short, int);
 extern int poll_pwr_btn();
+extern int relay_ctl(int);
 
 #endif /*  !_MQTT_WIRINGPI_H_ */

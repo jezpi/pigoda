@@ -30,12 +30,30 @@ sensors_t sensors;
 mqtt_global_cfg_t myMQTT;
 
 enum {SCALAR_SSEQ, SCALAR_SMAP, SCALAR_MAIN} scalar_opts = SCALAR_MAIN;
-enum {V_UNKNOWN, V_PIDFILE, V_LOGFILE, V_DEBUG, V_SERVER, V_MQTTUSER, V_MQTTPASS, V_MQTTPORT, V_DAEMON, V_DELAY, V_IDENTITY} c_opts = V_UNKNOWN;
-enum {S_MODNAME, S_CHANNEL, S_MODULE, S_TYPE, S_CONFIG, S_VAR , S_ADDRESS, S_I2CTYPE, S_INIT} module_opts = S_INIT;
-enum {GPIO_NAME, GPIO_PIN, GPIO_FUNCTION, GPIO_TYPE, GPIO_VALUE, GPIO_INIT, GPIO_TOPIC} gpio_opts = GPIO_VALUE;
-enum {BLK_MAIN, BLK_SENSORS, BLK_INPUT, BLK_GPIOS} blk_opts = BLK_MAIN;
-static char *curvar;
+enum {
+	V_UNKNOWN, V_PIDFILE, V_LOGFILE, V_DEBUG, V_SERVER, 
+	V_MQTTUSER, V_MQTTPASS, V_MQTTPORT, V_DAEMON, V_DELAY, V_IDENTITY
+     } c_opts = V_UNKNOWN;
 
+enum {
+	S_MODNAME, S_CHANNEL, S_MODULE, S_TYPE, 
+	S_CONFIG, S_VAR , S_ADDRESS, S_I2CTYPE, 
+	S_INIT
+     } module_opts = S_INIT;
+
+enum {
+	GPIO_NAME, GPIO_PIN, GPIO_FUNCTION, 
+	GPIO_TYPE, GPIO_VALUE, GPIO_INIT, 
+	GPIO_TOPIC
+     } gpio_opts = GPIO_VALUE;
+enum {
+	BLK_MAIN, 
+	BLK_SENSORS, 
+	BLK_INPUT, 
+	BLK_GPIOS
+} blk_opts = BLK_MAIN;
+
+static char *curvar;
 
 sensor_t *
 sensor_new(sensors_t *snrs, char *name)
@@ -314,10 +332,14 @@ proc_gpios_opt(char *scalar_value) {
 					curgpio->g_type = G_PWR_BTN;
 				}  else if (!strcasecmp(scalar_value, "pir_sensor")) {
 					curgpio->g_type = G_PIR_SENSOR;
+				}  else if (!strcasecmp(scalar_value, "relay")) {
+					curgpio->g_type = G_RELAY;
+				}  else if (!strcasecmp(scalar_value, "tip120")) {
+					curgpio->g_type = G_TIP120;
 				}  else if (!strcasecmp(scalar_value, "reserved")) {
 					curgpio->g_type = G_RESERVED;
 				}  else  {
-					dprintf("invalid led action %s", scalar_value);
+					dprintf("Invalid led action %s", scalar_value);
 					return (-1);
 				}
 				break;
@@ -366,7 +388,7 @@ parse_configfile(const char *path, mqtt_global_cfg_t *myconfig)
 	int		ret = 0;
 
 	if ((DEBUG_FLAG & 0xf)) {
-		if ((debuglog = fopen("./mqtt_debug.log", "w+")) != NULL) {
+		if ((debuglog = fopen("./mqtt_parser_debug.log", "w+")) != NULL) {
 			fprintf(debuglog, "===> Debug log start\n");
 		} else {
 			debuglog = stderr;
@@ -486,6 +508,12 @@ parse_configfile(const char *path, mqtt_global_cfg_t *myconfig)
 		fprintf(stderr, "sensor %s  on %s type %d\n", sp->s_name, sp->s_channel, sp->s_type);
 		sp = sp->s_next;
 	} while (sp != NULL);
+	gpio_t *g = myGPIOs.gpios_head;
+	do {
+		fprintf(stderr, "sensor %s  on %s type %d\n", g->g_name, g->g_topic, g->g_type);
+		g = g->g_next;
+	} while (g != NULL);
+
 
 
 	return (ret);

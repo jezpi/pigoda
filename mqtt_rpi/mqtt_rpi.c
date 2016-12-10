@@ -30,6 +30,7 @@
 #include "mqtt.h"
 #include "mqtt_sensors.h"
 #include "mqtt_wiringpi.h"
+#include "mqtt_cmd.h"
 #ifdef MQTTDEBUG
 
 static bool mqtt_connected = false;
@@ -80,7 +81,6 @@ typedef struct mqtt_hnd {
 	pid_t 			 mqh_mqttpir_pid;
 } mqtt_hnd_t;
 
-#include "mqtt_cmd.h"
 
 static mqtt_hnd_t Mosquitto;
 static FILE *logfile;
@@ -129,7 +129,7 @@ static void sig_hnd(int);
 
 static void usage(void);
 static void version(void);
-static void shutdown_linux(void);
+static void shutdown_linux(const char *);
 
 static int pool_sensors(struct mosquitto *mosq);
 int fork_mqtt_pir(struct pir_config *);
@@ -238,7 +238,9 @@ main(int argc, char **argv)
 				 */
 	}
 	if (startup_fanctl() == 0) {
-		MQTT_log("Startup of tip120");
+		MQTT_log("Startup of tip120.");
+	} else {
+		MQTT_log("TIP120 PWM disabled.");
 	}
 
 	if ((mqtt_connection = MQTT_init(&Mosquitto, false, (myMQTT_conf.identity == NULL?__PROGNAME:myMQTT_conf.identity))) == NULL) {
@@ -276,19 +278,19 @@ main(int argc, char **argv)
 					failure = 1;
 					break;
 			}
-			if (first_run) {
-				MQTT_pub(mqtt_connection, "/network/broadcast/mqtt_rpi", true, "on");
-				first_run = false;
-			}
-			if (got_SIGUSR1) {
-				MQTT_pub(mqtt_connection, "/network/broadcast/mqtt_rpi/user", false, "user_signal");
-				got_SIGUSR1 = 0;
-			}
-			if (got_SIGCHLD) {
-				waitpid(Mosquitto.mqh_mqttpir_pid, NULL, 0);
-				MQTT_log("got sigchld - mqttpir terminated!");
-				got_SIGCHLD = 0;
-			}
+		}
+		if (first_run && mqtt_connected) {
+			MQTT_pub(mqtt_connection, "/network/broadcast/mqtt_rpi", true, "on");
+			first_run = false;
+		}
+		if (got_SIGUSR1) {
+			MQTT_pub(mqtt_connection, "/network/broadcast/mqtt_rpi/user", false, "user_signal");
+			got_SIGUSR1 = 0;
+		}
+		if (got_SIGCHLD) {
+			waitpid(Mosquitto.mqh_mqttpir_pid, NULL, 0);
+			MQTT_log("got sigchld - mqttpir terminated!");
+			got_SIGCHLD = 0;
 		}
 
 		if (mqtt_conn_dead) {
@@ -306,11 +308,11 @@ main(int argc, char **argv)
 			main_loop = false;
 			fprintf(stderr, "%s) got SIGTERM\n", __PROGNAME);
 			got_SIGTERM = 0;
-			MQTT_pub(mqtt_connection, "/network/broadcast/mqtt", true, "off");
+			MQTT_pub(mqtt_connection, "/network/broadcast/mqtt_rpi", true, "off");
 		}
 		if (proc_command) {
 			proc_command = false;
-			MQTT_pub(mqtt_connection, "/network/broadcast", false, "%lu", Mosquitto.mqh_start_time);
+			MQTT_pub(mqtt_connection, "/network/broadcast/start_time", false, "%lu", Mosquitto.mqh_start_time);
 		}
 		if (do_pool_sensors) {
 			flash_led(NOTIFY_LED, HIGH);
@@ -337,12 +339,15 @@ main(int argc, char **argv)
 	}
 	MQTT_finish(&Mosquitto);
 	pidfile_remove(mr_pidfile);
-	fclose(logfile);
 	fanctl(FAN_OFF, NULL);
 	term_led_act(failure);
+	MQTT_log("Quitting");
 	if (shutdown_rpi) {
-		shutdown_linux();
+		MQTT_log("Calling shutdown of the machine");
+		fflush(logfile);
+		shutdown_linux("/sbin/halt");
 	}
+	fclose(logfile);
 	return (0);
 }
 
@@ -492,6 +497,12 @@ mqtt_proc_msg(char *topic, char *payload)
 				if (pstate == ST_CMDARGS && !strncasecmp(topics[n], "FAN", 3)) {
 					curcmd = CMD_FAN;
 					pstate = ST_DONE;
+				} else if (pstate == ST_CMDARGS && !strncasecmp(topics[n], "RELAY", 5)) {
+					curcmd = CMD_RELAY;
+					pstate = ST_DONE;
+				} else if (pstate == ST_CMDARGS && !strncasecmp(topics[n], "HALT", 4)) {
+					curcmd = CMD_HALT;
+					pstate = ST_DONE;
 				} else
 					pstate = ST_ERR;
 				break;
@@ -511,8 +522,12 @@ mqtt_proc_msg(char *topic, char *payload)
 			curcmd = CMD_STATS;
 		} else if (!strncasecmp(pbuf, "QUIT", 4)) {
 			curcmd = CMD_QUIT;
-		} else if (!strncasecmp(pbuf, "FAN", 4)) {
+		} else if (!strncasecmp(pbuf, "HALT", 4)) {
+			curcmd = CMD_HALT;
+		} else if (!strncasecmp(pbuf, "FAN", 3)) {
 			curcmd = CMD_FAN;
+		} else if (!strncasecmp(pbuf, "RELAY", 5)) {
+			curcmd = CMD_RELAY;
 		} else if (!strncasecmp(pbuf, "STAT_LED", 8)) {
 			curcmd = CMD_LED;
 		} else {
@@ -548,20 +563,38 @@ my_message_callback(struct mosquitto *mosq, void *userdata, const struct mosquit
 			case CMD_STATS:
 				proc_command = true;
 				break;
+			case CMD_HALT:
+				shutdown_rpi = true;
+				main_loop = false;
+				MQTT_printf("Shutdown triggered via MQTT\n");
+				break;
 			case CMD_QUIT:
 				main_loop = false;
 				break;
 			case CMD_FAN:
-				if (!strcasecmp(msg->payload, "FANON")) {
+				if (!strcasecmp(msg->payload, "on")) {
 					fanctl(FAN_ON, NULL);
 					MQTT_log( "DEBUG: Command Fan on %s/%s= %d\n", msg->topic, msg->payload, cmd);
-				} else if(!strcasecmp(msg->payload, "FANOFF")) {
+				} else if(!strcasecmp(msg->payload, "off")) {
 					fanctl(FAN_OFF, NULL);
 					MQTT_log( "DEBUG: Command fan off %s/%s= %d\n", msg->topic, msg->payload, cmd);
 				} else {
 					MQTT_log( "ERROR. Unknown command fan %s/%s= %d\n", msg->topic, msg->payload, cmd);
 				}
 				break;
+			case CMD_RELAY:
+				if (!strcasecmp(msg->payload, "on")) {
+					relay_ctl(1);
+					MQTT_log( "DEBUG: Command relay on %s/%s= %d\n", msg->topic, msg->payload, cmd);
+				}  else if(!strcasecmp(msg->payload, "off")) {
+					relay_ctl(0);
+					MQTT_log( "DEBUG: Command relay off %s/%s= %d\n", msg->topic, msg->payload, cmd);
+				} else {
+					MQTT_log( "ERROR. Unknown relay command %s/%s= %d\n", msg->topic, msg->payload, cmd);
+				}
+				break;
+			default:
+				MQTT_log("Command not handled. Internal error!");
  
 		}
 	}else {
@@ -1062,12 +1095,12 @@ MQTT_printf(const char *fmt, ...)
 }
 
 static void 
-shutdown_linux(void)
+shutdown_linux(const char *halt_path)
 {
 	switch(fork()) {
 		case 0:
-			execlp("/sbin/halt", "/sbin/halt", "-p", NULL);
-			MQTT_printf("execlp error %s\n", strerror(errno));
+			execlp(halt_path, halt_path, "-p", NULL);
+			MQTT_printf("execlp error when executing halt (%s) %s\n", halt_path, strerror(errno));
 			exit(3);
 			break;
 		case -1:
