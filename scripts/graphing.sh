@@ -136,6 +136,35 @@ graph_unknown_mly () {
 		GPRINT:uval:MAX:"Max\:  %5.2lf\n"  > /dev/null 2>&1
 
 }
+graph_unknown_daily () {
+	name=$1
+	echo "=> Creating daily png graph - \"${name}_daily.png\""
+	rrd_graph_def ${PNG_GRAPH_PATH}/${name}_daily.png \
+		-w 785 -h 160 -a PNG \
+		--slope-mode \
+		--start 'now-48h' --end 'now-300s' \
+		--title="${name} sensor stats " \
+		--watermark="Date `date`" \
+		--alt-y-grid \
+		--alt-autoscale \
+		--graph-render-mode=normal \
+		--grid-dash=1:3 \
+		--border=0 \
+		DEF:uval=${RRD_DB_PATH}/${name}.rrd:${name}:AVERAGE \
+		VDEF:uvalavg=uval,AVERAGE \
+		VDEF:uvalmin=uval,MINIMUM \
+		VDEF:uvallast=uval,LAST \
+		VDEF:uvalmax=uval,MAXIMUM \
+		AREA:uval#988FDC:"Values\t" \
+		LINE1:uvallast#A50004:"Last value\t":dashes \
+		LINE1:uvalmin#FFD63F:"min value\t":dashes \
+		LINE1:uvalmax#12B209:"max value\n":dashes \
+		GPRINT:uval:AVERAGE:"Avg\:  %5.2lf\n"  \
+		GPRINT:uval:LAST:"Last\: %5.2lf\n" \
+		GPRINT:uval:MIN:"Min\:  %5.2lf\n" \
+		GPRINT:uval:MAX:"Max\:  %5.2lf\n"  > /dev/null 2>&1
+
+}
 
 graph_pir() {
 echo "=> Creating png graph - pir on badacz"
@@ -628,7 +657,7 @@ do
 			do 
 				
 				echo $t; 
-				printf '<img src="./%s_monthly.png" />\n' "${t}" >> ${PNG_GRAPH_PATH}/graphs_monthly.html
+				printf '<img class="%s" alt="graph_%s" src="./%s_monthly.png" />\n' "${WEB_GRAPH_IMG_CLASS}" "${t}" "${t}" >> ${PNG_GRAPH_PATH}/graphs_monthly.html
 				update_graphs $t > /dev/null
 				eval graph_${t}_monthly > /dev/null 2>&1
 				if [ $? -ne 0 ]; then
@@ -646,7 +675,7 @@ do
 			do 
 				
 				echo $t; 
-				printf '<img src="./%s_weekly.png" />\n' "${t}" >> ${PNG_GRAPH_PATH}/graphs_weekly.html
+				printf '<img class="%s" alt="graph_%s" src="./%s_weekly.png" />\n' "${WEB_GRAPH_IMG_CLASS}" "${t}" "${t}" >> ${PNG_GRAPH_PATH}/graphs_weekly.html
 				update_graphs $t > /dev/null
 				eval graph_${t}_weekly > /dev/null 2>&1
 				if [ $? -ne 0 ]; then
@@ -671,12 +700,11 @@ do
 				
 				echo $t; 
 				update_graphs $t;
-				eval graph_$t
+				eval graph_${t}_daily
 				if [ $? -ne 0 ]; then
-					echo "!> daily graph failure."
-				else
-					printf '<img src="./%s_daily.png" />\n' "${t}" >> ${PNG_GRAPH_PATH}/graphs_daily.html
+					graph_unknown_daily ${t}
 				fi
+				printf '<img class="%s" alt="graph_%s" src="./%s_daily.png" />\n' "${WEB_GRAPH_IMG_CLASS}" "${t}" "${t}" >> ${PNG_GRAPH_PATH}/graphs_daily.html
 			done
 
 			;;
@@ -689,7 +717,7 @@ do
 			do 
 				
 				echo $t; 
-				printf '<img src="./%s.png" />\n' "${t}" >> ${PNG_GRAPH_PATH}/graphs_auto.html
+				printf '<img class="%s" alt="graph_%s" src="./%s.png" />\n' "${WEB_GRAPH_IMG_CLASS}" "${t}" "${t}" >> ${PNG_GRAPH_PATH}/graphs_auto.html
 				update_graphs $t;
 				eval graph_$t
 				if [ $? -ne 0 ]; then
