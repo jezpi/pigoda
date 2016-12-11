@@ -15,7 +15,7 @@ IFS='
 		--font='UNIT:7:Ubuntu' \
 		--font='WATERMARK:8:Ubuntu' \
 		--font='LEGEND:9:Ubuntu'  \
-		--color='BACK#E1E1E1' \
+		--color='BACK#FAFAFA' \
 		--lazy \
 		--legend-position=south \
 		--legend-direction=topdown \
@@ -48,8 +48,8 @@ graph_micguernilaptop () {
 
 
 graph_unknown () {
-	name=$1
-	echo "=> Creating png graph - $name"
+	local name=$1
+	echo "=> Creating png graph - ${name}.png"
 	rrd_graph_def ${PNG_GRAPH_PATH}/${name}.png \
 		-w 785 -h 160 -a PNG \
 		--slope-mode \
@@ -631,6 +631,31 @@ update_graphs () {
 	fi
 }
 
+html_links() {
+	local gtype=${1:?too few args}
+	local gname=$2
+	local class="${WEB_GRAPH_IMG_CLASS:-img-responsive}"
+	local htmlfile=${PNG_GRAPH_PATH}/graphs_${gtype}.html
+	local gfile=""
+
+	case $gtype in
+		auto)
+			gfile="${gname}.png"
+			printf '<a href="%s">\n' ${gfile} >> ${htmlfile}
+			printf '<img class="%s" alt="graph_%s_3h" src="%s" />\n' "${class}"  "${gname}" "${gfile}" >> ${htmlfile}
+			printf '</a>\n' >> ${htmlfile}
+ 			;;
+		weekly|daily|monthly)
+			gfile="${gname}_${gtype}.png"
+			printf '<a href="%s">\n' ${gfile} >> ${htmlfile}
+			printf '<img class="%s" alt="graph_%s_%s" src="%s" />\n' "${class}" "${gname}" "${gtype}" "${gfile}" >> ${htmlfile}
+			printf '</a>\n' >> ${htmlfile}
+			;;
+		
+	esac
+
+}
+
 usage() {
 	echo "graphing.sh commands: [custom|everything_daily|everything_monthly|everything|weekly|daily] [ddname]"
 }
@@ -650,14 +675,15 @@ do
 		exp)
 			echo "obsolete!"
 			;;
-		everything_monthly)
+		monthly)
 			echo "Creating \"${PNG_GRAPH_PATH}/graphs_monthly.html\""
 			:> ${PNG_GRAPH_PATH}/graphs_monthly.html
 			for t in $(sqlite3 /var/db/pigoda/sensorsv2.db '.tables'); 
 			do 
 				
 				echo $t; 
-				printf '<img class="%s" alt="graph_%s" src="./%s_monthly.png" />\n' "${WEB_GRAPH_IMG_CLASS}" "${t}" "${t}" >> ${PNG_GRAPH_PATH}/graphs_monthly.html
+				html_links "monthly" "${t}"
+				#printf '<img class="%s" alt="graph_%s" src="./%s_monthly.png" />\n' "${WEB_GRAPH_IMG_CLASS}" "${t}" "${t}" >> ${PNG_GRAPH_PATH}/graphs_monthly.html
 				update_graphs $t > /dev/null
 				eval graph_${t}_monthly > /dev/null 2>&1
 				if [ $? -ne 0 ]; then
@@ -668,14 +694,15 @@ do
 			done
 			;;
 
-		everything_weekly)
+		weekly)
 			echo "Creating \"${PNG_GRAPH_PATH}/graphs_weekly.html\""
 			:> ${PNG_GRAPH_PATH}/graphs_weekly.html
 			for t in $(sqlite3 /var/db/pigoda/sensorsv2.db '.tables'); 
 			do 
 				
 				echo $t; 
-				printf '<img class="%s" alt="graph_%s" src="./%s_weekly.png" />\n' "${WEB_GRAPH_IMG_CLASS}" "${t}" "${t}" >> ${PNG_GRAPH_PATH}/graphs_weekly.html
+				html_links "weekly" "${t}"
+				#printf '<img class="%s" alt="graph_%s" src="./%s_weekly.png" />\n' "${WEB_GRAPH_IMG_CLASS}" "${t}" "${t}" >> ${PNG_GRAPH_PATH}/graphs_weekly.html
 				update_graphs $t > /dev/null
 				eval graph_${t}_weekly > /dev/null 2>&1
 				if [ $? -ne 0 ]; then
@@ -684,12 +711,6 @@ do
 					graph_unknown_wkly ${t}
 				fi
 			done
-			;;
-		weekly)
-			graph_tempout_weekly
-			graph_tempin_weekly;
-			graph_light_weekly;
-			graph_vc_temp_badacz_weekly;
 			;;
 		daily)
 
@@ -704,20 +725,22 @@ do
 				if [ $? -ne 0 ]; then
 					graph_unknown_daily ${t}
 				fi
-				printf '<img class="%s" alt="graph_%s" src="./%s_daily.png" />\n' "${WEB_GRAPH_IMG_CLASS}" "${t}" "${t}" >> ${PNG_GRAPH_PATH}/graphs_daily.html
+				html_links "daily" "${t}"
+				#printf '<img class="%s" alt="graph_%s" src="./%s_daily.png" />\n' "${WEB_GRAPH_IMG_CLASS}" "${t}" "${t}" >> ${PNG_GRAPH_PATH}/graphs_daily.html
 			done
 
 			;;
 		custom)
 			graph_temprel_custom;
 			;;
-		everything)
+		auto)
 			:> ${PNG_GRAPH_PATH}/graphs_auto.html
 			for t in $(sqlite3 /var/db/pigoda/sensorsv2.db '.tables'); 
 			do 
 				
 				echo $t; 
-				printf '<img class="%s" alt="graph_%s" src="./%s.png" />\n' "${WEB_GRAPH_IMG_CLASS}" "${t}" "${t}" >> ${PNG_GRAPH_PATH}/graphs_auto.html
+				#printf '<img class="%s" alt="graph_%s" src="./%s.png" />\n' "${WEB_GRAPH_IMG_CLASS}" "${t}" "${t}" >> ${PNG_GRAPH_PATH}/graphs_auto.html
+				html_links "auto" "${t}"
 				update_graphs $t;
 				eval graph_$t
 				if [ $? -ne 0 ]; then
