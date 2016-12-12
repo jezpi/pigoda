@@ -1,11 +1,16 @@
 #!/bin/bash 
 
 . ./pigoda_rrd.inc.sh
-dt=`date +%s`
+: ${VERBOSE:=0}
+
+ifverbose () {
+	local input
+	read input
+	[ ${VERBOSE:-0} -eq 1 ] && printf " \`--==> %s\n" "$input"
+}
 
 rrd_graph_def () {
-
-	echo "=> Graphing $1"
+	local gname=${1:?too few args}
 oIFS=$IFS
 IFS='
 '
@@ -21,7 +26,7 @@ IFS='
 		--legend-direction=topdown \
 		--grid-dash=1:3 \
 		--slope-mode \
-		--border=0
+		--border=0 | ifverbose
 IFS=$oIFS
 }
 
@@ -41,7 +46,7 @@ graph_micguernilaptop () {
 		VDEF:uvallast=uval,AVERAGE \
 		AREA:uval#0000FF:"values\n" \
 		LINE1:uvallast#FF00FF:"Last value\n":dashes \
-		GPRINT:uval:AVERAGE:"Avg\: %5.2lf\n" 
+		GPRINT:uval:AVERAGE:"Avg\: %5.2lf\n"  
 
 }
 
@@ -73,8 +78,9 @@ graph_unknown () {
 		GPRINT:uval:AVERAGE:"Avg\:  %5.2lf\n"  \
 		GPRINT:uval:LAST:"Last\: %5.2lf\n" \
 		GPRINT:uval:MIN:"Min\:  %5.2lf\n" \
-		GPRINT:uval:MAX:"Max\:  %5.2lf\n" 
+		GPRINT:uval:MAX:"Max\:  %5.2lf\n"   
 
+return 1
 }
 
 graph_unknown_wkly () {
@@ -103,7 +109,7 @@ graph_unknown_wkly () {
 		GPRINT:uval:AVERAGE:"Avg\:  %5.2lf\n"  \
 		GPRINT:uval:LAST:"Last\: %5.2lf\n" \
 		GPRINT:uval:MIN:"Min\:  %5.2lf\n" \
-		GPRINT:uval:MAX:"Max\:  %5.2lf\n" 
+		GPRINT:uval:MAX:"Max\:  %5.2lf\n"  
 
 }
 
@@ -190,7 +196,7 @@ echo "=> Creating png graph - pir on badacz"
 		GPRINT:movm:AVERAGE:"Avg\: %5.2lf\n" \
 		GPRINT:movm:MAX:"Max\: %5.2lf\n" \
 		GPRINT:movm:MIN:"Min\: %5.2lf\n" \
-		GPRINT:movm:LAST:"Last\: %5.2lf\n" 
+		GPRINT:movm:LAST:"Last\: %5.2lf\n"  
 
 }
 
@@ -216,7 +222,7 @@ graph_humidity () {
 		GPRINT:hum:MAX:"Max\: %5.2lf\n" \
 		GPRINT:hum:AVERAGE:"Avg\: %5.2lf\n" \
 		GPRINT:hum:MIN:"Min\: %5.2lf\n" \
-		GPRINT:hum:LAST:"Last\: %5.2lf\n" 
+		GPRINT:hum:LAST:"Last\: %5.2lf\n"  
 
 }
 
@@ -239,7 +245,7 @@ echo "=> Creating png graph - tempin on badacz in made"
 		GPRINT:temp_in:MAX:"Max\: %5.2lf\n" \
 		GPRINT:temp_in:AVERAGE:"Avg\: %5.2lf\n" \
 		GPRINT:temp_in:MIN:"Min\: %5.2lf\n" \
-		GPRINT:temp_in:LAST:"Last\: %5.2lf\n" 
+		GPRINT:temp_in:LAST:"Last\: %5.2lf\n"  
 
 }
 
@@ -262,7 +268,7 @@ echo "=> Creating png graph - temperature in guerni"
 		GPRINT:temp_in:MAX:"Max\: %5.2lf\n" \
 		GPRINT:temp_in:AVERAGE:"Avg\: %5.2lf\n" \
 		GPRINT:temp_in:MIN:"Min\: %5.2lf\n" \
-		GPRINT:temp_in:LAST:"Last\: %5.2lf\n" 
+		GPRINT:temp_in:LAST:"Last\: %5.2lf\n"  
 }
 
 
@@ -300,7 +306,7 @@ graph_vc_temp_badacz() {
 		GPRINT:vc_temp:MAX:"Max\: %5.2lf" \
 		GPRINT:vc_temp:AVERAGE:"Avg\: %5.2lf" \
 		GPRINT:vc_temp:MIN:"Min\: %5.2lf" \
-		GPRINT:vc_temp:LAST:"Last\: %5.2lf" 
+		GPRINT:vc_temp:LAST:"Last\: %5.2lf"  
 
 }
 
@@ -319,7 +325,7 @@ graph_vc_temp_badacz_weekly() {
 		GPRINT:vc_temp:MAX:"Max\: %5.2lf" \
 		GPRINT:vc_temp:AVERAGE:"Avg\: %5.2lf" \
 		GPRINT:vc_temp:MIN:"Min\: %5.2lf" \
-		GPRINT:vc_temp:LAST:"Last\: %5.2lf" 
+		GPRINT:vc_temp:LAST:"Last\: %5.2lf"  
 }
 
 #--lower-limit 15 \
@@ -359,7 +365,7 @@ rrd_graph_def ${PNG_GRAPH_PATH}/temp_rel.png \
 	GPRINT:temp_out:MIN:"Min outside\: %5.2lf\n"  \
 	GPRINT:temp_out:AVERAGE:"Avg outside\: %5.2lf\n" \
 	GPRINT:temp_in:LAST:"Last inside\: %5.2lf\n"  \
-	GPRINT:temp_out:LAST:"Last outside\: %5.2lf\n" 
+	GPRINT:temp_out:LAST:"Last outside\: %5.2lf\n"  
 
 }
 
@@ -380,7 +386,7 @@ rrd_graph_def ${PNG_GRAPH_PATH}/vc_temp_badacz_daily.png \
 	LINE1:vctempmax#008000:"vc temp max(C)\l" \
 	GPRINT:vc_temp:MAX:"Max\: %5.2lf\l" \
 	GPRINT:vc_temp:MIN:"Min\: %5.2lf \l"  \
-	GPRINT:vc_temp:LAST:"Last\: %5.2lf \l" 
+	GPRINT:vc_temp:LAST:"Last\: %5.2lf \l"  
 }
 
 graph_light () {
@@ -464,7 +470,7 @@ echo "=> Creating png graph - tempout"
 	GPRINT:tempout:MAX:" Max\: %5.2lf \n" \
 	GPRINT:tempout:AVERAGE:" Avg\: %5.2lf \n" \
 	GPRINT:tempout:MIN:" Min\: %5.2lf\n" \
-	GPRINT:tempout:LAST:"Last\: %5.2lf\n" 
+	GPRINT:tempout:LAST:"Last\: %5.2lf\n"  
 }
 
 graph_tempout_weekly() {
@@ -482,7 +488,7 @@ AREA:tempout#EF500B:"temperature(C)\n" \
 GPRINT:tempout:MAX:" Max\: %5.2lf \n" \
 GPRINT:tempout:AVERAGE:" Avg\: %5.2lf \n" \
 GPRINT:tempout:MIN:" Min\: %5.2lf\n" \
-GPRINT:tempout:LAST:"Last\: %5.2lf\n" 
+GPRINT:tempout:LAST:"Last\: %5.2lf\n"  > /dev/null 2>&1
 }
 
 
@@ -505,7 +511,7 @@ LINE1:pressuremin#006680:"Pressure min (hPa)\n":dashes \
 GPRINT:pressure:MAX:"Max\: %5.2lf" \
 GPRINT:pressure:MIN:"Min\: %5.2lf" \
 GPRINT:pressure:LAST:"Last\: %5.2lf"  \
-GPRINT:pressure:AVERAGE:"Avg\: %5.2lf" 
+GPRINT:pressure:AVERAGE:"Avg\: %5.2lf"  
 
 
 }
@@ -615,7 +621,7 @@ LINE1:micmin#006680:"mic min \n":dashes \
 GPRINT:mic:MAX:"Max\: %5.2lf\n" \
 GPRINT:mic:MIN:"Min\: %5.2lf\n" \
 GPRINT:mic:LAST:"Last\: %5.2lf\n"  \
-GPRINT:mic:AVERAGE:"Avg\: %5.2lf\n" 
+GPRINT:mic:AVERAGE:"Avg\: %5.2lf\n"  
 
 }
 
@@ -641,9 +647,13 @@ html_links() {
 	case $gtype in
 		auto)
 			gfile="${gname}.png"
-			printf '<a href="%s">\n' ${gfile} >> ${htmlfile}
-			printf '<img class="%s" alt="graph_%s_3h" src="%s" />\n' "${class}"  "${gname}" "${gfile}" >> ${htmlfile}
-			printf '</a>\n' >> ${htmlfile}
+			printf '<div class="panel panel-default">\n' >> ${htmlfile}
+			printf '\t<div class="panel-body">\n' >> ${htmlfile}
+			printf '\t <a href="%s">\n' ${gfile} >> ${htmlfile}
+			printf '\t\t\t<img class="%s" alt="graph_%s_3h" src="%s" />\n' "${class}"  "${gname}" "${gfile}" >> ${htmlfile}
+			printf '\t </a>\n' >> ${htmlfile}
+			printf '\t</div>\n' >> ${htmlfile}
+			printf '</div>\n' >> ${htmlfile}
  			;;
 		weekly|daily|monthly)
 			gfile="${gname}_${gtype}.png"
@@ -657,7 +667,7 @@ html_links() {
 }
 
 usage() {
-	echo "graphing.sh commands: [custom|everything_daily|everything_monthly|everything|weekly|daily] [ddname]"
+	echo "graphing.sh commands: [custom|auto|daily|weekly|monthly] [ddname]"
 }
 
 ######################################
@@ -672,23 +682,28 @@ fi
 for cmd in $@ 
 do
 	case $cmd in
+		update)
+			echo "=> Updating graphs"
+			for t in $(sqlite3 /var/db/pigoda/sensorsv2.db '.tables'); 
+			do
+				echo "==> Updating \"${t}\""
+				updatecnt=$(update_graphs $t  | wc -l)
+				[ "${updatecnt:-0}" -gt 0 ] && printf '===> %d recs \n' "${updatecnt}"
+			done
+			;;
 		exp)
 			echo "obsolete!"
 			;;
 		monthly)
-			echo "Creating \"${PNG_GRAPH_PATH}/graphs_monthly.html\""
+			echo "=> Creating \"${PNG_GRAPH_PATH}/graphs_monthly.html\""
 			:> ${PNG_GRAPH_PATH}/graphs_monthly.html
 			for t in $(sqlite3 /var/db/pigoda/sensorsv2.db '.tables'); 
 			do 
-				
-				echo $t; 
+				echo "==> Drawing \"${t}\""
 				html_links "monthly" "${t}"
-				#printf '<img class="%s" alt="graph_%s" src="./%s_monthly.png" />\n' "${WEB_GRAPH_IMG_CLASS}" "${t}" "${t}" >> ${PNG_GRAPH_PATH}/graphs_monthly.html
-				update_graphs $t > /dev/null
 				eval graph_${t}_monthly > /dev/null 2>&1
 				if [ $? -ne 0 ]; then
-					echo "!> Weekly graphs not available for ${t}"
-					#echo "!> graph failure. Trying to graph by anonymously"
+					printf " \`- - !> Monthly custom graph not available for \"${t}\"\n"
 					graph_unknown_mly ${t}
 				fi
 			done
@@ -700,14 +715,11 @@ do
 			for t in $(sqlite3 /var/db/pigoda/sensorsv2.db '.tables'); 
 			do 
 				
-				echo $t; 
+				echo "==> Drawing \"${t}\""
 				html_links "weekly" "${t}"
-				#printf '<img class="%s" alt="graph_%s" src="./%s_weekly.png" />\n' "${WEB_GRAPH_IMG_CLASS}" "${t}" "${t}" >> ${PNG_GRAPH_PATH}/graphs_weekly.html
-				update_graphs $t > /dev/null
 				eval graph_${t}_weekly > /dev/null 2>&1
 				if [ $? -ne 0 ]; then
 					echo "!> Weekly graphs not available for ${t}"
-					#echo "!> graph failure. Trying to graph by anonymously"
 					graph_unknown_wkly ${t}
 				fi
 			done
@@ -719,32 +731,32 @@ do
 			for t in $(sqlite3 /var/db/pigoda/sensorsv2.db '.tables'); 
 			do 
 				
-				echo $t; 
-				update_graphs $t;
-				eval graph_${t}_daily
+				echo "==> Drawing \"${t}\""
+				eval graph_${t}_daily > /dev/null 2>&1
 				if [ $? -ne 0 ]; then
 					graph_unknown_daily ${t}
 				fi
 				html_links "daily" "${t}"
-				#printf '<img class="%s" alt="graph_%s" src="./%s_daily.png" />\n' "${WEB_GRAPH_IMG_CLASS}" "${t}" "${t}" >> ${PNG_GRAPH_PATH}/graphs_daily.html
 			done
 
 			;;
 		custom)
-			graph_temprel_custom;
+			v="temprel"
+			eval graph_${v}_custom;
+				if [ $? -ne 0 ]; then
+					echo "===> Failed to graph temprel"
+				fi
 			;;
 		auto)
 			:> ${PNG_GRAPH_PATH}/graphs_auto.html
 			for t in $(sqlite3 /var/db/pigoda/sensorsv2.db '.tables'); 
 			do 
 				
-				echo $t; 
-				#printf '<img class="%s" alt="graph_%s" src="./%s.png" />\n' "${WEB_GRAPH_IMG_CLASS}" "${t}" "${t}" >> ${PNG_GRAPH_PATH}/graphs_auto.html
+				echo "==> $t"; 
 				html_links "auto" "${t}"
-				update_graphs $t;
 				eval graph_$t
 				if [ $? -ne 0 ]; then
-					echo "!> graph failure. Trying to graph by anonymously"
+					echo "!> $t graph failure. Trying to graph by anonymously"
 					graph_unknown ${t}
 				fi
 			done
