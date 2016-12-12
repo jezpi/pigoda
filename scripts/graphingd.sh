@@ -12,9 +12,9 @@ mosquitto_pub -r -h localhost -u guernika -P umyka -t '/network/broadcast/mqtt_g
 tput clear
 while true;
 do
-	./graphing.sh exp
-	./graphing.sh everything_daily
-	./graphing.sh everything
+	./graphing.sh update
+	./graphing.sh daily
+	./graphing.sh auto
 	./graphing.sh custom
 	printf "Last update %s\n" "`date`"
 	sleep 300
