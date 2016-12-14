@@ -25,6 +25,7 @@
 #include "mqtt_db.h"
 
 #include "mqtt.h"
+#include "mqtt_cmd.h"
 
 /* Thingspeak */
 #ifdef THINGSPEAK
@@ -48,52 +49,8 @@ void trap(void)
 #define trap() ;
 #endif
 
-struct router_stats {
-	char	*rs_name;
-	char	*rs_tx_rate;
-	char	*rs_rx_rate;
-};
 
-
-struct MQTT_statistics {
-	unsigned long	mqs_msgcnt;
-	unsigned long	mqs_msgbytes;
-	int	mqs_last_pub_mid;
-	int	mqs_last_mid;
-
-} MQTT_stat;
-
-typedef struct scr_stat {
-	char 	*ss_name;
-	float 	 ss_value;
-	unsigned long ss_err_sqlite;
-	unsigned long ss_store_sqlite;
-	time_t 	ss_lastupdate;
-	struct scr_stat *ss_next;
-} scr_stat_t;
-
-
-struct mq_ch_screen {
-	WINDOW *win;
-	WINDOW *win_stat;
-	scr_stat_t *screen_stats_head;
-	scr_stat_t *screen_stats_tail;
-	double	pressure;
-	double tempin;
-	double tempout;
-	double vc_temp;
-	double humidity;
-	double pir;
-	int	light;
-	unsigned long err_sqlite[9];
-	unsigned long store_sqlite[9];
-#define STAT_SQLITE_PRESSURE	0
-#define STAT_SQLITE_TEMPIN	1
-#define STAT_SQLITE_TEMPOUT	2
-#define STAT_SQLITE_LIGHT	3
-#define STAT_SQLITE_HUMIDITY	4
-#define STAT_SQLITE_PIR		5
-} screen_data;
+struct mq_ch_screen screen_data;
 
 
 
@@ -156,19 +113,43 @@ scr_stat_update(struct mq_ch_screen *sd, const char *name, float value)
 	return (sp);
 }
 
+topic_t *
+topic_add(channel_set_t *chset, char *name)
+{
+	topic_t *tp;
+
+	tp = calloc(1, sizeof(*tp));
+	tp->t_name = strdup(name);
+
+	if (chset->channel_head == NULL) {
+		chset->channel_head = chset->channel_tail = tp;
+	} else {
+		chset->channel_tail->t_next = tp;
+		chset->channel_tail = tp;
+	}
+	return (tp);
+}
+
+topic_t *
+topic_find(channel_set_t *chset, const char *topic)
+{
+	topic_t *tp = NULL;
+	bool match = false;
+
+	if ((tp = chset->channel_head) == NULL)
+		return (NULL);
+	do {
+		if (mosquitto_topic_matches_sub(tp->t_name, topic, &match) != MOSQ_ERR_SUCCESS)
+			return (NULL);
+		if (match == true) {
+			return (tp);
+		}
+		tp = tp->t_next;
+	} while (tp != NULL && tp != chset->channel_head);
+	return (tp);
+}
 
 
-
-
-typedef struct mqtt_hnd {
-	struct mosquitto	*mqh_mos;
-#define MAX_MSGBUF_SIZ	BUFSIZ
-#define MAX_ID_SIZ	BUFSIZ
-	char			 mqh_msgbuf[MAX_MSGBUF_SIZ];
-	char 			 mqh_id[MAX_ID_SIZ];
-	bool 			 mqh_clean_session;
-	time_t			 mqh_start_time;
-} mqtt_hnd_t;
 
 #ifdef THINGSPEAK
 struct ts_MQTT {
@@ -176,11 +157,11 @@ struct ts_MQTT {
 } *TSMQTT;
 #endif
 
-#include "mqtt_cmd.h"
 
 static mqtt_hnd_t 	 Mosquitto;
 mqtt_global_cfg_t	 myMQTT_conf;
 static bool 		 proc_command;
+static bool 		 verbose_mode;
 static volatile bool 	 main_loop;
 static sig_atomic_t 	 unknown_signal;
 static sig_atomic_t 	 got_SIGUSR1;
@@ -193,20 +174,27 @@ const char 		*__HOSTNAME;
 static MQTT_db_t    	*sqlitedb;
 static char 		*path_config_file;
 
+
+static struct mosquitto * MQTT_init(mqtt_hnd_t *, bool, const char *) ;
+/* 
+ * Most basic routines
+ */
 static void my_publish_callback(struct mosquitto *, void *, int);
 static void my_subscribe_callback(struct mosquitto *, void *, int, int, const int *);
 static void my_log_callback(struct mosquitto *, void *, int , const char *);
 static void my_message_callback(struct mosquitto *, void *, const struct mosquitto_message *);
 static void my_connect_callback(struct mosquitto *, void *, int);
 static void register_callbacks(struct mosquitto *);
-
-static struct mosquitto * MQTT_init(mqtt_hnd_t *, bool, const char *) ;
 static int MQTT_loop(void *, int);
 static int  MQTT_pub(struct mosquitto *mosq, const char *topic, bool, const char *, ...);
 static int MQTT_sub(struct  mosquitto *m, const char *topic_fmt, ...);
 int MQTT_printf(const char *, ...);
+int MQTT_debug(const char *, ...);
 int MQTT_log(const char *, ...);
 static void MQTT_finish(mqtt_hnd_t *);
+
+static int MQTT_init_topics(struct mosquitto *, channel_set_t *);
+
 #define NCURSES
 #ifdef NCURSES
 static WINDOW *init_screen();
@@ -214,34 +202,24 @@ void destroy_screen(struct mq_ch_screen *) ;
 static int update_screen_stats(struct mq_ch_screen *) ;
 
 #endif /* NCURSES */
+
 static struct mosquitto * MQTT_reconnect(struct mosquitto *m, int *ret);
 #ifdef THINGSPEAK
 static int MQTT_to_ts(struct ts_MQTT *, MQTT_data_type_t type, float value);
 static struct ts_MQTT * MQTT_to_ts_init(const char *apikey, int channel);
 #endif /* ! THINGSPEAK */
-
-
 static bool mqtt_rpi_init(const char *progname, char *conf);
-
-
-
-
 mqtt_cmd_t mqtt_proc_msg(char *, char *);
 char * mqtt_poli_proc_msg(char *, char *);
-
 static int set_logging(mqtt_global_cfg_t *myconf);
+static void siginfo(int signo, siginfo_t *info, void *context);
 static void sig_hnd(int);
 
 static void usage(void);
 
 
-static void siginfo(int signo, siginfo_t *info, void *context);
 /*
  * Application used to collect and store information from various MQTT channels
- *
- */
-
-/*
  *
  * usage: mqtt_rpi [config_file]
  */
@@ -256,7 +234,8 @@ main(int argc, char **argv)
 
 	proc_command = false;
 	time(&Mosquitto.mqh_start_time);
-	while ((ch = getopt(argc, argv, "S")) != -1) {
+	__PROGNAME = basename(argv[0]);
+	while ((ch = getopt(argc, argv, "nSvc:")) != -1) {
 		switch (ch) {
 			case 'S':
 				sqlite3_dont_store = true;
@@ -264,17 +243,25 @@ main(int argc, char **argv)
 			case 'c':
 				path_config_file = strdup(optarg);
 				break;
+			case 'v':
+				verbose_mode = true;
+				break;
+			case 'n':
+				parser_test = true;
+				break;
 			default:
 				usage();
 				exit(64);
 		}
 	}
 
-	if ((main_loop = mqtt_rpi_init(argv[0], path_config_file)) == false) {
+	if ((main_loop = mqtt_rpi_init(__PROGNAME, path_config_file)) == false) {
 		fprintf(stderr, "%s: failed to init\n", __PROGNAME);
 		exit(3);
 	}
 
+	if (parser_test)
+		exit(0);
 #ifdef NCURSES
 	init_screen(&screen_data);
 #endif /* ! NCURSES */
@@ -292,9 +279,12 @@ main(int argc, char **argv)
 		MQTT_log("Not storing to sqlite3 DB\n");
 
 #ifdef THINGSPEAK
-	TSMQTT = MQTT_to_ts_init("YLW6C8UWBXKWMEXZ", 10709);
+	TSMQTT = MQTT_to_ts_init("", );
+	/* NOTUSED */
 #endif
-	MQTT_sub(Mosquitto.mqh_mos, "/environment/#" );
+
+	MQTT_init_topics(Mosquitto.mqh_mos, myMQTT_conf.mqtt_channels);
+	/*MQTT_sub(Mosquitto.mqh_mos, "/environment/#" );*/
 	/*MQTT_sub(mosq, "/IoT#");*/
 
 	while (main_loop) {
@@ -473,6 +463,9 @@ mqtt_poli_proc_msg(char *topic, char *payload)
 				break;
 		}
 	}
+	if (topic_cnt >= 2) {
+		ret = strdup(topics[topic_cnt - 1]);
+	}
 	mosquitto_sub_topic_tokens_free(&topics, topic_cnt);
 	return (ret);
 }
@@ -578,15 +571,21 @@ my_log_callback(struct mosquitto *mosq, void *userdata, int level, const char *s
 static void
 my_message_callback(struct mosquitto *mosq, void *userdata, const struct mosquitto_message *msg)
 {
+	topic_t         *tp;
 	mqtt_cmd_t  cmd;
 	scr_stat_t 	*sp;
-	float light, tempin, tempout, pressure, humidity, pir;
 	char *dataf;
 	float val;
 	time_t curtim;
 
 
 	if (msg->payloadlen){
+		if (( tp = topic_find(myMQTT_conf.mqtt_channels, msg->topic)) != NULL) {
+			switch(tp->t_action) {
+				case TP_PRINT:
+					MQTT_printf("%s = %s\n", msg->topic, msg->payload);
+					break;
+				case TP_STORE:
 		if ((dataf = mqtt_poli_proc_msg(msg->topic, msg->payload)) != NULL) {
 			val = atof((char *)msg->payload);
 			if ((sp = scr_stat_find(&screen_data, dataf)) == NULL) {
@@ -598,12 +597,12 @@ my_message_callback(struct mosquitto *mosq, void *userdata, const struct mosquit
 			}
 			curtim = time(NULL);
 			if (sp->ss_lastupdate == curtim) {
-				MQTT_printf("Not updating. Duplicated data on %s\n", sp->ss_name);
+				MQTT_debug("Not updating. Duplicated data on %s\n", sp->ss_name);
 			} else {
 				sp->ss_lastupdate = curtim;
 				if (!sqlite3_dont_store) {
 					if (MQTT_poli_store(sqlitedb, dataf, val) != 0) {
-						MQTT_log("Store failure\n");
+						MQTT_debug("Store failure %s %s %f\n", msg->topic, msg->payload, val);
 						sp->ss_err_sqlite++;
 					} else {
 						sp->ss_store_sqlite++;
@@ -611,118 +610,18 @@ my_message_callback(struct mosquitto *mosq, void *userdata, const struct mosquit
 				}
 			}
 		}
-	} else {
-		MQTT_log( "Empty message on %s\n", msg->topic);
-	}
-	return;
- 	/*  XXX * NOT REACHED * XXX */
-	if (0)
-	{
-		cmd = mqtt_proc_msg(msg->topic, msg->payload);
-		if (cmd == CMD_ERR)
-			/*MQTT_printf( "Command %s = %d\n", msg->topic, msg->payload, cmd);
-		else*/
-			MQTT_printf( "CMD_ERR: Unknown command %s@\"%s\" = %d\n",  msg->payload, msg->topic,cmd);
-		switch (cmd) {
-			case CMD_STATS:
-				proc_command = true;
-				break;
-			case CMD_QUIT:
-				main_loop = false;
-				break;
-			case CMD_LIGHT:
-				light = atof(msg->payload);
-				screen_data.light = (int) light;
-				/*MQTT_log("\\storing light value %d %s\n", (int) light, msg->payload);*/
-#ifdef THINGSPEAK
-				MQTT_to_ts(TSMQTT, T_LIGHT, light);
-#endif /* ! THINGSPEAK */
-				if (MQTT_store(sqlitedb, T_LIGHT, light) != 0) {
-					MQTT_log("Store failure\n");
-					screen_data.err_sqlite[STAT_SQLITE_LIGHT]++;
-				} else {
-					screen_data.store_sqlite[STAT_SQLITE_LIGHT]++;
-				}
-				break;
-			case CMD_TEMPIN:
-				tempin = atof(msg->payload);
-				screen_data.tempin = tempin;
-#ifdef THINGSPEAK
-				MQTT_to_ts(TSMQTT, T_TEMPIN, tempin);
-#endif /* ! THINGSPEAK */
-				/*MQTT_printf("\\storing tempin %f \n", tempin );*/
-				if (MQTT_store(sqlitedb, T_TEMPIN, tempin) != 0) {
-					MQTT_log("Store failure\n");
-					screen_data.err_sqlite[STAT_SQLITE_TEMPIN]++;
-				} else {
-					screen_data.store_sqlite[STAT_SQLITE_TEMPIN]++;
-				}
-				break;
-			case CMD_TEMPOUT:
-				tempout = atof(msg->payload);
-				screen_data.tempout = tempout;
-				/*MQTT_printf("\\storing tempout %f \n", tempout );*/
-#ifdef THINGSPEAK
-				MQTT_to_ts(TSMQTT, T_TEMPOUT, tempout);
-#endif /* ! THINGSPEAK */
-				if (MQTT_store(sqlitedb, T_TEMPOUT, tempout) != 0) {
-					MQTT_log("Store failure\n");
-					screen_data.err_sqlite[STAT_SQLITE_TEMPOUT]++;
-				} else {
-					screen_data.store_sqlite[STAT_SQLITE_TEMPOUT]++;
-				}
-				break;
-			case CMD_PRESSURE:
-				pressure = atof(msg->payload);
-				screen_data.pressure = pressure;
-#ifdef THINGSPEAK
-				MQTT_to_ts(TSMQTT, T_PRESSURE, pressure);
-#endif /* ! THINGSPEAK */
-				/*MQTT_printf("\\storing pressure %f \n", pressure );*/
-				if (MQTT_store(sqlitedb, T_PRESSURE, pressure) != 0) {
-					MQTT_log("Store failure\n");
-					screen_data.err_sqlite[STAT_SQLITE_PRESSURE]++;
-				} else {
-					screen_data.store_sqlite[STAT_SQLITE_PRESSURE]++;
-				}
-				break;
-			case CMD_HUMIDITY:
-				humidity = atof(msg->payload);
-				screen_data.humidity = humidity;
 
-				if (MQTT_store(sqlitedb, T_HUMIDITY, humidity) != 0) {
-					MQTT_log("Store failure\n");
-					screen_data.err_sqlite[STAT_SQLITE_HUMIDITY]++;
-				} else {
-					screen_data.store_sqlite[STAT_SQLITE_HUMIDITY]++;
-				}
-				break;
-
-			case CMD_PIR:
-				pir = atof(msg->payload);
-				screen_data.pir = pir;
-
-				if (MQTT_store(sqlitedb, T_PIR, pir) != 0) {
-					MQTT_log("Store failure\n");
-					screen_data.err_sqlite[STAT_SQLITE_PIR]++;
-				} else {
-					screen_data.store_sqlite[STAT_SQLITE_PIR]++;
-				}
-				break;
-			case CMD_MQ2:
-				pir = atof(msg->payload);
-				screen_data.pir = pir;
-
-				if (MQTT_store(sqlitedb, T_MQ2, pir) != 0) {
-					MQTT_log("Store failure\n");
-					screen_data.err_sqlite[STAT_SQLITE_PIR]++;
-				} else {
-					screen_data.store_sqlite[STAT_SQLITE_PIR]++;
-				}
-				break;
+					break;
+				case TP_ALERT:
+					break;
+				case TP_SKIP:
+					break;
+			} /* switch */
+		} else {
+			MQTT_debug("unknown message %s = %s\n", msg->topic, msg->payload);
 		}
 	} else {
-		MQTT_log( "Empty message on %s\n", msg->topic);
+		MQTT_printf( "Empty message on %s\n", msg->topic);
 	}
 
 	return;
@@ -826,7 +725,6 @@ MQTT_pub(struct mosquitto *mosq, const char *topic, bool perm, const char *fmt, 
 	/*mosquitto_publish(mosq, NULL, "/network/broadcast", 3, Mosquitto.mqh_msgbuf, 0, false);*/
 	if (mosquitto_publish(mosq, &mid, topic, msglen, msgbuf, 0, perm) == MOSQ_ERR_SUCCESS) {
 		ret = mid;
-		MQTT_stat.mqs_last_pub_mid = mid;
 	} else
 		ret = -1;
 	return (ret);
@@ -922,11 +820,10 @@ mqtt_rpi_init(const char *progname, char *conf)
 		__HOSTNAME = "nil";
 
 	/*p = basename(progname);*/
-	__PROGNAME = basename(progname);
 	configfile = ((conf != NULL)?conf:DEFAULT_CONFIG_FILE);
 	if (parse_configfile(configfile, &myMQTT_conf) < 0) {
 		ret = false;
-		printf("Failed to parse config file \"%s\"\n", configfile);
+		fprintf(stderr, "Failed to parse config file \"%s\"\n", configfile);
 		return (false);
 	}
 
@@ -954,6 +851,23 @@ mqtt_rpi_init(const char *progname, char *conf)
 	if (set_logging(&myMQTT_conf) < 0)
 		ret = false;
 	return (ret);
+}
+/* 
+ * Subscribe to previously configured topics
+ */
+static int 
+MQTT_init_topics(struct mosquitto *m, channel_set_t *chset)
+{
+	topic_t *tp ;
+	if ((tp = chset->channel_head) == NULL)
+		return (-1);
+
+
+	do {
+		MQTT_sub(m, tp->t_name);
+		tp = tp->t_next;
+	} while (tp != NULL && tp != chset->channel_head);
+	return (0);
 }
 
 #ifdef NCURSES
@@ -1121,11 +1035,13 @@ MQTT_debug(const char *fmt, ...)
 		*p = '\0';
 	}
 	/*printf("%s\n", pbuf);*/
-	if (screen_data.win != NULL) {
-		wprintw(screen_data.win, "%s\n", pbuf);
-		wrefresh(screen_data.win);
-	} else
-		fprintf(stderr, "%s\n", pbuf);
+	if (verbose_mode == true)  {
+		if (screen_data.win != NULL) {
+			wprintw(screen_data.win, "%s\n", pbuf);
+			wrefresh(screen_data.win);
+		} else
+			fprintf(stderr, "%s\n", pbuf);
+	}
 #ifdef MQTTDEBUG
 	fprintf(logfile, "%s\n", pbuf);
 	fflush(logfile);
@@ -1156,12 +1072,12 @@ MQTT_printf(const char *fmt, ...)
 	if ((p = strrchr(pbuf, '\n')) != NULL) {
 		*p = '\0';
 	}
-	/*printf("%s\n", pbuf);*/
 	if (screen_data.win != NULL) {
 		wprintw(screen_data.win, "%s\n", pbuf);
 		wrefresh(screen_data.win);
-	} else
+	} else {
 		fprintf(stderr, "%s\n", pbuf);
+	}
 #ifdef MQTTDEBUG
 	fprintf(logfile, "%s\n", pbuf);
 	fflush(logfile);
@@ -1172,6 +1088,6 @@ MQTT_printf(const char *fmt, ...)
 static void
 usage(void)
 {
-	fprintf(stderr, "usage: %s\n", __PROGNAME);
+	fprintf(stderr, "usage: %s [-Sv] [-c config_file] \n", __PROGNAME);
 	exit(64);
 }
