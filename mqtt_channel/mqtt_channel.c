@@ -32,21 +32,11 @@
 #include "libthingspeak/src/thingspeak.h"
 #endif
 
-#ifdef MQTTDEBUG
-
+#ifdef MQTTDEBUG /* debugging options */
 static unsigned short DEBUG_FLAG=0x4;
 /*  /static unsigned short DEBUG_MODE=0x0;*/
 #define dprintf if (DEBUG_FLAG) printf
 #define ddprintf if (DEBUG_FLAG>0x4) printf
-#endif
-#ifdef MQTTDEBUG
-void trap(void)
-{
-	int a = 2+2;
-	return;
-}
-#else
-#define trap() ;
 #endif
 
 
