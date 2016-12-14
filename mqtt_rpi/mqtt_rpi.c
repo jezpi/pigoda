@@ -39,21 +39,7 @@ static unsigned short DEBUG_FLAG=0x4;
 #define dprintf if (DEBUG_FLAG) printf
 #define ddprintf if (DEBUG_FLAG>0x4) printf
 #endif
-#ifdef MQTTDEBUG
-void trap(void)
-{
-	int a = 2+2;
-	return;
-}
-#else
-#define trap() ;
-#endif
 
-struct router_stats {
-	char	*rs_name;
-	char	*rs_tx_rate;
-	char	*rs_rx_rate;
-};
 
 struct pir_config {
 	gpio_t 		 *pir_gpio;
@@ -820,7 +806,7 @@ fork_mqtt_pir(struct pir_config *cnf)
 		chpid = -1;
 	}
 #else
-#define MQTT_PIR_PATH     "/home/jez/repos/pigoda/mqtt_rpi/mqttpir/mqttpir"
+#define MQTT_PIR_PATH     "/usr/bin/mqttpir"
 	switch((chpid = fork())) {
 		case 0: /* XXX hardcoded path */
 			execlp(MQTT_PIR_PATH, MQTT_PIR_PATH, NULL);
