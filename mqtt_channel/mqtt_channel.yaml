@@ -14,10 +14,10 @@ sqlite3_db: "/var/db/pigoda/sensorsv2.db"
 identity: "mqtt_channel_laptop"
 # configuration of channels
 channels:
-        - name: "/guernika/network/broadcast"
-          on_message: "store_sqlite3"
+        - name: "/network/broadcast/"
+          on_message: "print"
 
-        - name:  "/guernika/environment/#"
-          on_message: "drop"
+        - name:  "/environment/#"
+          on_message: "store"
 
 ...
