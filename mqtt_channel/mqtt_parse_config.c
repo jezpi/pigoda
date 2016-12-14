@@ -1,16 +1,33 @@
 #include <stdio.h>
-
+#include <stdbool.h>
 #include <yaml.h>
+#include <curses.h>
 
 #include "mqtt.h"
 #define DEBUG
 #ifdef DEBUG
+
+extern topic_t * topic_find(channel_set_t *, char *);
+extern topic_t * topic_add(channel_set_t *, char *);
+channel_set_t *chset;
+
 
 static unsigned short DEBUG_FLAG=0x0;
 /*  /static unsigned short DEBUG_MODE=0x0;*/
 #define dprintf if (DEBUG_FLAG) printf
 #define ddprintf if (DEBUG_FLAG>0x4) printf
 #endif
+
+#define NEWTAB(x)	strncat(x, "\t", sizeof x)
+static void print_resume(void);
+
+void
+TABRM(char *tabp)
+{
+	char *p;
+	if ((p = strrchr(tabp, '\t')) != NULL) *p = '\0';
+}
+
 typedef enum {DEBUG_BASE=0x1, DEBUG_FUNC=0x2} debug_type_t;
 /*
 typedef struct mqtt_global_config_t {
@@ -23,15 +40,34 @@ typedef struct mqtt_global_config_t {
 */
 
 mqtt_global_cfg_t myMQTT;
-
+bool parser_test;
 static char *curvar;
 FILE *debuglog;
-enum {V_UNKNOWN, V_PIDFILE, V_LOGFILE, V_DEBUG, V_SERVER, V_MQTTUSER, V_MQTTPASS, V_MQTTPORT, V_CHANNEL_PREFIX, V_SQLITE_PATH, V_IDENTITY} c_opts = V_UNKNOWN;
 
-static int yaml_assign_scalar(yaml_event_t *t)
+
+char *channels[10];
+int chidx;
+
+static enum {
+	V_UNKNOWN, V_PIDFILE, V_LOGFILE, V_DEBUG, V_SERVER, 
+	V_MQTTUSER, V_MQTTPASS, V_MQTTPORT, V_CHANNEL_PREFIX, 
+	V_SQLITE_PATH, V_IDENTITY, V_CHNAME, V_ON_MESSAGE
+     } c_opts = V_UNKNOWN;
+
+
+static enum {BLK_MAIN, BLK_CHANNELS} blk_opt = BLK_MAIN;
+static char		tabbuf[29] = {""}, *p;
+
+
+char *cur_channel_name;
+topic_t *cur_topic;
+
+static int 
+yaml_assign_scalar(yaml_event_t *t)
 {
 
-	if (DEBUG_FLAG&0x4) fprintf(debuglog, "%s() : Processing  %s\n", __func__ , t->data.scalar.value);
+	char *p;
+	if (DEBUG_FLAG&0xff) fprintf(debuglog, "%s\t[%s() : Processing scalar.value=\"%s\"]\n", tabbuf, __func__ , t->data.scalar.value);
 	if (!strcasecmp(t->data.scalar.value, "pidfile")) {
 		c_opts = V_PIDFILE;
 		myMQTT.pidfile = NULL;
@@ -53,6 +89,10 @@ static int yaml_assign_scalar(yaml_event_t *t)
 		c_opts = V_SQLITE_PATH;
 	} else if (!strcasecmp(t->data.scalar.value, "identity")) {
 		c_opts = V_IDENTITY;
+	} else if (!strcasecmp(t->data.scalar.value, "name")) {
+		c_opts = V_CHNAME;
+	} else if (!strcasecmp(t->data.scalar.value, "on_message")) {
+		c_opts = V_ON_MESSAGE;
 	} else {
 		
 		switch (c_opts) {
@@ -96,6 +136,26 @@ static int yaml_assign_scalar(yaml_event_t *t)
 				myMQTT.identity = strdup(t->data.scalar.value);
 				c_opts = V_UNKNOWN;
 				break;
+			case V_CHNAME:
+				cur_topic = topic_add(chset, strdup(t->data.scalar.value));
+				c_opts = V_UNKNOWN;
+				break;
+			case V_ON_MESSAGE:
+				if (cur_topic == NULL) {
+					return (-1);
+				}
+
+				if (!strcasecmp(t->data.scalar.value, "print")) {
+					cur_topic->t_action = TP_PRINT;
+				} else if (!strcasecmp(t->data.scalar.value, "store")) {
+					cur_topic->t_action = TP_STORE;
+				} else if (!strcasecmp(t->data.scalar.value, "alert")) {
+					cur_topic->t_action = TP_ALERT;
+				} else if (!strcasecmp(t->data.scalar.value, "skip")) {
+					cur_topic->t_action = TP_SKIP;
+				} else
+					return (-1);
+				break;
 		}
 	}
 
@@ -115,15 +175,12 @@ parse_configfile(const char *path, mqtt_global_cfg_t *myconfig)
 	yaml_event_t	event;
 	FILE		*inputf;
 	char		*last_scalar = NULL;
-	char		tabbuf[29] = {""}, *p;
 	int		ret = 0;
 
+	if (parser_test)
+		DEBUG_FLAG=0xff;
 	if ((DEBUG_FLAG & 0xf)) {
-		if ((debuglog = fopen("/var/log/mqtt_debug.log", "w+")) != NULL) {
-			fprintf(debuglog, "===> Debug log start\n");
-		} else {
-			debuglog = stderr;
-		}
+		debuglog = stderr;
 	} 
 
 	if ((inputf = fopen(path, "r")) == NULL) {
@@ -134,6 +191,7 @@ parse_configfile(const char *path, mqtt_global_cfg_t *myconfig)
 	} else {
 		dprintf("%s()@ Parsing \"%s\"\n", __func__, path);
 	}
+	chset = calloc(1, sizeof(channel_set_t));
 	yaml_parser_initialize(&parser);
 	yaml_parser_set_input_file(&parser, inputf);
 	do {
@@ -146,7 +204,6 @@ parse_configfile(const char *path, mqtt_global_cfg_t *myconfig)
 		}
 		switch (event.type) {
 			case YAML_STREAM_START_EVENT: 
-#define NEWTAB(x)	strncat(x, "\t", sizeof x)
 				NEWTAB(tabbuf);
 				dprintf("S-START %d\n", event.data.stream_start.encoding); 
 				break;
@@ -171,6 +228,7 @@ parse_configfile(const char *path, mqtt_global_cfg_t *myconfig)
 				}
 				break;
 			case YAML_MAPPING_START_EVENT:  
+				NEWTAB(tabbuf);
 				dprintf("%sS-MAP START %s:%s@%s\n", 
 						tabbuf,
 						event.data.mapping_start.tag, 
@@ -197,13 +255,20 @@ parse_configfile(const char *path, mqtt_global_cfg_t *myconfig)
 						event.data.sequence_start.anchor,
 						last_scalar
 						); 
+				if (!strcasecmp(last_scalar, "channels")) {
+					dprintf("%s== channel config\n", tabbuf);
+					blk_opt = BLK_CHANNELS;
+				}
 				/*  new_block(last_scalar); */
 				break;
 			case YAML_MAPPING_END_EVENT:
-				dprintf("M-END\n");
+				dprintf("%sM-END\n", tabbuf);
+				TABRM(tabbuf);
 				break;
 			case YAML_SEQUENCE_END_EVENT:  
-				dprintf("S-SEQ END\n"); 
+				blk_opt = BLK_MAIN;
+				dprintf("%sS-SEQ END\n", tabbuf); 
+				TABRM(tabbuf);
 				break;
 			case YAML_NO_EVENT:
 				dprintf("null\n"); 
@@ -218,7 +283,24 @@ parse_configfile(const char *path, mqtt_global_cfg_t *myconfig)
 	if (myconfig != NULL) 
 		bcopy(&myMQTT, myconfig, sizeof(myMQTT));
 
+	myconfig->mqtt_channels = chset;
+	if ((DEBUG_FLAG & 0x8)) 
+		print_resume();
 	return (ret);
 }
 
 
+static void
+print_resume(void)
+{
+	topic_t *tp;
+	int n = 0;
+	printf("======================================================\n");
+	printf("| Resume\n");
+	tp = chset->channel_head;
+	do {
+		printf("|\t%s %d\n", tp->t_name, tp->t_action);
+		tp = tp->t_next;
+	} while (tp != NULL);
+	printf("|\n======================================================\n");
+}
