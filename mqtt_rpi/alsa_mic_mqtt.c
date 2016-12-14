@@ -17,6 +17,7 @@
 #include <mosquitto.h>
 
 const char *audio_device = "hw:0";
+static int channels;
 static int  MQTT_pub(struct mosquitto *, const char *, bool , const char *, ...);
 static char *mqtt_host, *mqtt_user, *mqtt_password, *mqtt_topic, *mqtt_identity;
 static int mqtt_port = 1883;
@@ -32,15 +33,20 @@ main (int argc, char *argv[])
   char *buffer;
   int opt;
   struct mosquitto *m;
-  
+ /* Defaults:  */
   mqtt_identity = "alsa_capture";
   mqtt_host = "localhost";
   mqtt_topic = "/environment/mic";
+  channels = 2;
 
-	while ((opt = getopt(argc, argv, "a:i:h:u:p:P:vdt:")) != -1) {
+
+	while ((opt = getopt(argc, argv, "a:C:i:h:u:p:P:vdt:")) != -1) {
 		switch(opt) {
 			case 'a':
 				audio_device = strdup(optarg);
+				break;
+			case 'C':
+				channels = atoi(optarg);
 				break;
 			case 'h': /* host */
 				mqtt_host = strdup(optarg);
@@ -71,6 +77,7 @@ main (int argc, char *argv[])
 				exit(64);
 		}
 	}
+   
    if (mqtt_host == NULL || mqtt_user == NULL || mqtt_password == NULL || mqtt_topic == NULL) {
 	   usage();
 	   printf("too few arguments\n");
@@ -148,7 +155,7 @@ main (int argc, char *argv[])
 	  exit(3);
   }
 
-  if ((pcm_err = snd_pcm_hw_params_set_channels (capture_handle, hw_params, 2)) < 0) {
+  if ((pcm_err = snd_pcm_hw_params_set_channels (capture_handle, hw_params, channels)) < 0) {
     dfprintf (stderr, "cannot set channel count (%s)\n", snd_strerror (pcm_err));
     exit (1);
   }
@@ -236,6 +243,6 @@ MQTT_pub(struct mosquitto *mosq, const char *topic, bool perm, const char *fmt, 
 static void
 usage(void)
 {
-	printf("usage: mqtt_mic [-a audio_device] [-i identity] [-t topic] [-u user] [-h host] [-P passowrd] [-p port] -v -d\n");
+	printf("usage: mqtt_mic [-C channels] [-a audio_device] [-i identity] [-t topic] [-u user] [-h host] [-P passowrd] [-p port] -v -d\n");
 
 }
