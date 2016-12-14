@@ -17,12 +17,17 @@ MQTT_db_t *
 MQTT_initdb(const char *path) {
 	MQTT_db_t *mq_db;
 	sqlite3 *db;
-	sqlite3_open(path, &db);
+	if (sqlite3_open(path, &db) != SQLITE_OK)  {
+		sqlite3_dont_store = true;
+		fprintf(stderr, "Failed to open sqlite db %s\n", sqlite3_errmsg(db));
+		return (NULL);
+	}
 	mq_db = malloc(sizeof (MQTT_db_t));
 	mq_db->Mdb_hnd = db;
 	return (mq_db);
 }
 
+int
 MQTT_detachdb(MQTT_db_t *mq_db) {
 	sqlite3_close(mq_db->Mdb_hnd);
 }
