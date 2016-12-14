@@ -1,49 +1,52 @@
 # pigoda - Introduction
 Sensing station project on Raspberry Pi. The project is divided into
-software (i.e. mqtt_rpi, mqtt_channel, and rrdtool handling scripts) and
-hardware - boards design as well as design of 3D printed pieces (n/a yet).
-
-The version available on github still have lots of defaults from my
-personal lab. *IT IS NOT RECOMMENDED TO RUN IT WITHOUT LOOKING INTO
-THE SOURCE CODE AND CONFIGURATION FILE*
-
+software and hardware. The software parts consist of 3 main bits:
+daemon called *mqtt_rpi* which runs on raspberry Pi and is used to
+send statistics. Application called *mqtt_channel* used to collect
+sent statistcs. And the plotting software which are basically shell/python
+scripts. The hardware part includes board designs as well as designs of 3D 
+printed parts (n/a yet). Everything works via *MQTT* protocol. An example
+of MQTT client is available in ![here](https://jezpi.github.io/pigoda/sluchacz)
 
 ## The software
-The standard installation assumes that You have two machines, one is a 
-raspberry pi which sensors connected to specified pins and second is
-a mosquitto server which broadcasts information on a configured channel.
+The standard installation assumes that You have an access to MQTT broker and a
+VPS or something like that to collect the statistics. Since I use rrdtool as a plotting
+library the statistics require continuity. You should provide a stable connection with accetable
+latency (can't be too slow). It is not recommended to run *mqtt_channel* on the same raspberry Pi
+where You run *mqtt_rpi* because of SD card overload (It could simply kill Your
+SD card). 
 ### mqtt_rpi
 #### Introduction
 
 mqtt_rpi is a broker client as all software pieces written here.
          it sends statistics from previously configured gpios/i2c devices
-	 to specified in a config file *mqtt_rpi.yaml* MQTT channels.
+	 specified in a config file *mqtt_rpi.yaml*. Also it handles some
+         basic commands including relay switch on and off.
 	   
 #### Status:
 Ready to use version is available. However it's missing some documentation
 
-Part | Task |  Priority
------|------|--------
-mqtt_rpi, mqtt_channel|Reconnecting on MQTT error | High 
-mqtt_pir, mqtt_rf | Both need to integrate with mqtt_rpi | High
-new pigoda v2 board | redesign, include more gpio protection (with optocoupler and or overcurrent protection)| design ongoing
-website | has to be done | High
-mqtt_channel | Change database engine to MySQL from Sqlite3 | Medium
-mqtt_channel | code checkout | Low
-3D models | Models for boxes used to isolate sensors etc. | Low 
+Part | Task |  Priority | Status
+-----|------|-----------|-------
+mqtt_rpi, mqtt_channel|Reconnecting on MQTT error | - | Done 
+mqtt_rf | Need to integrate with mqtt_rpi | High | Not started
+mqtt_pir | Need to integrate with mqtt_rpi | - |  Done
+new pigoda v2 board | redesign, include more gpio protection (with optocoupler and or overcurrent protection)| High | design ongoing
+website | Make a simple responsive website | High | In progress
+mqtt_channel | Change database engine to MySQL from Sqlite3 | Medium | Not started
+mqtt_channel | code checkout | Low | Not started
+3D models | Models for boxes used to isolate sensors etc. | Low | Not started
 
 ### How it really works?!
 
-![graph](https://jezpi.github.io/pigoda/pigoda_howto.svg)
 
 **The basic knowledge about MQTT protocol is required**
 **More info on https://github.com/mqtt/mqtt.github.io/wiki**
 
 There are 4 applications:
 
-* mqtt_rpi - Gets the data from sensors, process it, and publish on _MQTT_ channel.
+* mqtt_rpi - Gets the data from sensors, process it, and publish on a given _MQTT_ channel.
 * mqtt_channel -  Listens on a given channel and stores the obtained data to Sqlite3 database.
-* mqtt_pir - Gets statistics from pir sensor and publish it on a given _MQTT_ channel.
 * mqtt_rf - Gets statistics from  nRF24+ and pushish it on a given _MQTT_ channel.
 
 #### How to use it?
