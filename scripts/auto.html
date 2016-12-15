@@ -18,6 +18,13 @@
     <![endif]-->
    <style type="text/css">
    </style>
+   <script type="text/javascript">
+   function reloadontm() {
+     window.location.reload();
+     window.setTimeout(reloadontm, 600000);
+   }
+   window.setTimeout(reloadontm, 600000);
+   </script>
   </head>
   <body>
     <!--# include file="./header.html" -->
@@ -27,7 +34,7 @@
     </div>
     <div class="row">
      <div class="col-lg-offset-1 col-lg-10 ">
-       <button type="button" class="pull-right btn btn-primary">Auto refresh</button>
+       <!--<button type="button" class="pull-right btn btn-primary">Auto refresh</button>-->
        <br />
        <hr>
      </div>
