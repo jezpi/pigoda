@@ -2,16 +2,17 @@ DFLAGS=-DPARSER_DEBUG -DMQTTDEBUG
 CFLAGS+=-g -W
 CC=gcc
 LDFLAGS=  -lmosquitto -lyaml -lsqlite3 -lncurses
-TS=libthingspeak/src/thingspeak.o libthingspeak/src/ts_time.o libthingspeak/src/ts_http.o
 	
 
 
-mqtt_channel: mqtt_channel.o mqtt_parse_config.o mqtt_sqlite3.o
+mqtt_channel: mqtt_channel.o mqtt_parse_config.o mqtt_sqlite3.o mqtt_ADT.o
 	$(CC) -L/home/jez/code/lib/ $(CFLAGS) -o $@ $+  $(LDFLAGS)
 
 mqtt_channel.o: mqtt_channel.c
 	$(CC) $(DFLAGS) $(CFLAGS) -pipe -c $< 
 
+mqtt_ADT.o: mqtt_ADT.c
+	$(CC) $(DFLAGS) $(CFLAGS) -pipe -c $< 
 
 mqtt_sqlite3.o: mqtt_sqlite3.c
 	$(CC) $(DFLAGS) $(CFLAGS) -pipe -c $< 
