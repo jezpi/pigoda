@@ -3,12 +3,11 @@
 #include <yaml.h>
 #include <curses.h>
 
+#include "mqtt_ADT.h"
 #include "mqtt.h"
 #define DEBUG
 #ifdef DEBUG
 
-extern topic_t * topic_find(channel_set_t *, char *);
-extern topic_t * topic_add(channel_set_t *, char *);
 channel_set_t *chset;
 
 
