@@ -23,6 +23,8 @@ install: /var/www/pigoda/index.html /var/www/pigoda/custom.html
 	install -m 644 -o root weekly.html $(installpath)/
 	install -m 644 -o root monthly.html $(installpath)/
 	install -m 644 -o root daily.html $(installpath)/
+	install -m 644 -o root pigoda.js $(installpath)/js/
+	install -m 644 -o root js.cookie.js $(installpath)/js/
 
 
 check: $(ls *.html)
