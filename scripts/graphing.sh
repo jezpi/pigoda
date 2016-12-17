@@ -647,11 +647,11 @@ html_links() {
 	case $gtype in
 		auto)
 			gfile="${gname}.png"
-			printf '<div class="panel panel-default">\n' >> ${htmlfile}
-			printf '\t<div class="panel-heading">\n' >> ${htmlfile}
-			printf '\t%s statistics\n' "${gname}" >> ${htmlfile}
-			printf '\t</div>\n' >> ${htmlfile}
-			printf '\t<div class="panel-body">\n' >> ${htmlfile}
+			printf '<div class="graph_panel panel panel-default" id="%s_graph_panel">\n' "${gname}"  >> ${htmlfile}
+			printf '\t<div class="panel-heading">' >> ${htmlfile}
+			printf '%s statistics' "${gname}" >> ${htmlfile}
+			printf '</div>\n' >> ${htmlfile}
+			printf '\t<div class="panel-body" >\n' >> ${htmlfile}
 			printf '\t <a href="%s">\n' ${gfile} >> ${htmlfile}
 			printf '\t\t\t<img class="%s" alt="graph_%s_3h" src="%s" />\n' "${class}"  "${gname}" "${gfile}" >> ${htmlfile}
 			printf '\t </a>\n' >> ${htmlfile}
