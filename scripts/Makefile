@@ -25,7 +25,7 @@ install: /var/www/pigoda/index.html /var/www/pigoda/custom.html
 	install -m 644 -o root daily.html $(installpath)/
 	install -m 644 -o root pigoda.js $(installpath)/js/
 	install -m 644 -o root js.cookie.js $(installpath)/js/
-
+	rsync -a jquery-ui-1.12.1.custom/ $(installpath)/jquery-ui/
 
 check: $(ls *.html)
 	@echo "checking $?"
