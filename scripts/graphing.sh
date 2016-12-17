@@ -236,7 +236,7 @@ echo "=> Creating png graph - tempin on badacz in made"
 		--no-gridfit \
 		--start 'now-3h' --end 'now-300s' \
 		--font='DEFAULT:7:' \
-		--title="Temperature inside" \
+		--title="Temperature in the box" \
 		--watermark="Date `date`" \
 		DEF:temp_in=${RRD_DB_PATH}/tempin.rrd:tempin:AVERAGE \
 		VDEF:tempinlast=temp_in,LAST \
@@ -648,6 +648,9 @@ html_links() {
 		auto)
 			gfile="${gname}.png"
 			printf '<div class="panel panel-default">\n' >> ${htmlfile}
+			printf '\t<div class="panel-heading">\n' >> ${htmlfile}
+			printf '\t%s statistics\n' "${gname}" >> ${htmlfile}
+			printf '\t</div>\n' >> ${htmlfile}
 			printf '\t<div class="panel-body">\n' >> ${htmlfile}
 			printf '\t <a href="%s">\n' ${gfile} >> ${htmlfile}
 			printf '\t\t\t<img class="%s" alt="graph_%s_3h" src="%s" />\n' "${class}"  "${gname}" "${gfile}" >> ${htmlfile}
@@ -657,9 +660,16 @@ html_links() {
  			;;
 		weekly|daily|monthly)
 			gfile="${gname}_${gtype}.png"
+			printf '<div class="panel panel-default">\n' >> ${htmlfile}
+			printf '\t<div class="panel-heading">\n' >> ${htmlfile}
+			printf '\t%s statistics\n' "${gname}" >> ${htmlfile}
+			printf '\t</div>\n' >> ${htmlfile}
+			printf '\t<div class="panel-body">\n' >> ${htmlfile}
 			printf '<a href="%s">\n' ${gfile} >> ${htmlfile}
 			printf '<img class="%s" alt="graph_%s_%s" src="%s" />\n' "${class}" "${gname}" "${gtype}" "${gfile}" >> ${htmlfile}
 			printf '</a>\n' >> ${htmlfile}
+			printf '\t</div>\n' >> ${htmlfile}
+			printf '</div>\n' >> ${htmlfile}
 			;;
 		
 	esac
