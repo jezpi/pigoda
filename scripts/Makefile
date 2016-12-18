@@ -1,3 +1,4 @@
+BINUSER=jez
 ifdef PNG_GRAPH_PATH
 installpath=$(PNG_GRAPH_PATH)
 else
@@ -12,19 +13,27 @@ all:
 
 /var/www/pigoda/index.html: index.html
 	@echo "making index.html"
-	install -m 644 -o root index.html $(installpath)/$<
+	#install -m 644 -o root index.html $(installpath)/$<
 
-install: /var/www/pigoda/index.html /var/www/pigoda/custom.html
-	install -m 644 -o root index.html $(installpath)/
-	install -m 644 -o root auto.html $(installpath)/
-	install -m 644 -o root custom.html $(installpath)/
-	install -m 644 -o root footer.html $(installpath)/
-	install -m 644 -o root header.html $(installpath)/
-	install -m 644 -o root weekly.html $(installpath)/
-	install -m 644 -o root monthly.html $(installpath)/
-	install -m 644 -o root daily.html $(installpath)/
-	install -m 644 -o root pigoda.js $(installpath)/js/
-	install -m 644 -o root js.cookie.js $(installpath)/js/
+
+
+/var/www/pigoda/custom.html: custom.html
+	@echo "installing $<"
+	install -m 644 -o root custom.html $(installpath)/$<
+
+
+install: /var/www/pigoda/index.html
+	install -m 644 -o $(BINUSER) index.html $(installpath)/
+	install -m 644 -o $(BINUSER) auto.html $(installpath)/
+	install -m 644 -o $(BINUSER) custom.html $(installpath)/
+	install -m 644 -o $(BINUSER) footer.html $(installpath)/
+	install -m 644 -o $(BINUSER) header.html $(installpath)/
+	install -m 644 -o $(BINUSER) weekly.html $(installpath)/
+	install -m 644 -o $(BINUSER) monthly.html $(installpath)/
+	install -m 644 -o $(BINUSER) daily.html $(installpath)/
+	install -d -m 755 -o $(BINUSER) $(installpath)/js
+	install -m 644 -o $(BINUSER) pigoda.js $(installpath)/js/
+	install -m 644 -o $(BINUSER) js.cookie.js $(installpath)/js/
 	rsync -a jquery-ui-1.12.1.custom/ $(installpath)/jquery-ui/
 
 check: $(ls *.html)
