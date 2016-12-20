@@ -14,7 +14,13 @@ all:
 
 $(installpath)/index.html: index.html
 	@echo "making index.html"
-	#install -m 644 -o root index.html $(installpath)/$<
+	@#install -m 644 -o root index.html $(installpath)/$<
+
+bootstrap-3.3.7-dist.zip: 
+	@echo "Installing bootstrap to $(installpath)"
+	wget https://github.com/twbs/bootstrap/releases/download/v3.3.7/bootstrap-3.3.7-dist.zip
+	unzip bootstrap-3.3.7-dist.zip
+	rsync -a bootstrap-3.3.7-dist/ $(installpath)/
 
 js.cookie.js: 
 	@echo "git clone..."
@@ -31,9 +37,9 @@ jquery-ui-1.12.1.zip:
 	install -m 644 -o root custom.html $(installpath)/$<
 
 
-install: js.cookie.js jquery-ui-1.12.1.zip $(installpath)/index.html
-	install -m 644 -o $(BINUSER) index.html $(installpath)/
-	install -m 644 -o $(BINUSER) auto.html $(installpath)/
+install: bootstrap-3.3.7-dist.zip js.cookie.js jquery-ui-1.12.1.zip $(installpath)/index.html
+	install -m 755 -o $(BINUSER) index.html $(installpath)/
+	install -m 755 -o $(BINUSER) auto.html $(installpath)/
 	install -m 644 -o $(BINUSER) custom.html $(installpath)/
 	install -m 644 -o $(BINUSER) footer.html $(installpath)/
 	install -m 644 -o $(BINUSER) header.html $(installpath)/
