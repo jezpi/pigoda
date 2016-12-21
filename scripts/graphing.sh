@@ -257,8 +257,7 @@ echo "=> Creating png graph - temperature in guerni"
 		--start 'now-12h' --end 'now' \
 		--upper-limit 25 \
 		--lower-limit 15 \
-		--font='DEFAULT:7:' \
-		--title="Temperature inside - guerni" \
+		--title="Temperature l24" \
 		--watermark="Date `date`" \
 		--rigid \
 		DEF:temp_in=${RRD_DB_PATH}/tempin_guerni.rrd:tempin_guerni:AVERAGE \
@@ -277,8 +276,8 @@ echo "=> Creating png graph - temperature inside in guerni"
 	rrd_graph_def ${PNG_GRAPH_PATH}/tempin_weekly.png \
 		-w 785 -h 120 -a PNG \
 		--slope-mode \
-		--start 'now-14d' --end now \
-		--title="Temperature inside - past 14 days" \
+		--start 'now-7d' --end now \
+		--title="Temperature in the box" \
 		--watermark="Date `date`" \
 		--alt-y-grid \
 		--rigid \
@@ -396,7 +395,6 @@ rrd_graph_def ${PNG_GRAPH_PATH}/light.png \
 	-w 785 -h 120 -a PNG \
 	--slope-mode \
 	--start 'now-3h' --end 'now-60s' \
-	--font='DEFAULT:7:' \
 	--title="Light past 3 hours" \
 	--watermark="Date `date`" \
 	--alt-y-grid \
@@ -452,13 +450,11 @@ graph_tempout() {
 echo "=> Creating png graph - tempout"
 	rrd_graph_def ${PNG_GRAPH_PATH}/tempout.png \
 	-w 785 -h 150 -a PNG \
-	--slope-mode \
-	--upper-limit 20 \
-	--lower-limit 15 \
 	--start 'now-3h' --end 'now-600s' \
 	--title="Temperature in made. Past 3 hours" \
 	--watermark="Date `date`" \
-	--rigid \
+	--lower-limit=13	\
+	--upper-limit=20	\
 	DEF:tempout=${RRD_DB_PATH}/tempout.rrd:tempout:AVERAGE \
 	VDEF:tempoutlast=tempout,LAST \
 	VDEF:tempoutmin=tempout,MINIMUM \
@@ -580,7 +576,7 @@ rrd_graph_def ${PNG_GRAPH_PATH}/mic_guerni.png \
 -w 785 -h 120 -a PNG \
 --slope-mode \
 --start 'now-1h' --end 'now' \
---title="Mic guerni" \
+--title="Mic home" \
 --watermark="Date `date`" \
 --lower-limit 0 \
 --upper-limit 5000 \
