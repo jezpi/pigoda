@@ -93,23 +93,28 @@ def plot_table(sqlitedb, tname):
 
 
 
+def update_create_ds(ds_name):
+	cmd = ds_name
+	try:
+		os.stat(rrddbpath+"/"+cmd+".rrd")
+		update_db(dbfile, cmd);
+	except:
+		# if file does not exist create it with *create_rrd_db* and fill via *fill_rrd_db*
+		plot_table(dbfile, cmd)
 
 #######
 # main
 #
 
-dbfile="/var/db/pigoda/sensorsv2.db";
-rrddbpath="/var/db/pigoda/rrd/";
+
+dbfile=os.getenv("SQLITE_DB_PATH", "/var/db/pigoda/sensorsv2.db");
+rrddbpath=os.getenv("RRD_DB_PATH","/var/db/pigoda/rrd/");
 
 if len(sys.argv) < 2:
 	print "usage: update_rrd [arg]"
 	sys.exit(0);
 	
 cmd=sys.argv[1]
-try:
-	os.stat(rrddbpath+"/"+cmd+".rrd")
-except:
-	plot_table(dbfile, cmd)
 
-update_db(dbfile, cmd);
 
+update_create_ds(cmd);
