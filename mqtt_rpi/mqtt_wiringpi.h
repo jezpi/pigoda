@@ -12,7 +12,7 @@ extern int gpios_setup(gpios_t *);
 extern int startup_fanctl();
 extern int fanctl(short, int *);
 extern int startup_led_act(int, int);
-extern int term_led_act(short) ;
+extern int term_led_act(bool) ;
 extern int flash_led(short, int);
 extern int poll_pwr_btn();
 extern int relay_ctl(int);
