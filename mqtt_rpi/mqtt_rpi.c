@@ -95,6 +95,7 @@ static void my_subscribe_callback(struct mosquitto *, void *, int, int, const in
 static void my_log_callback(struct mosquitto *, void *, int , const char *);
 static void my_message_callback(struct mosquitto *, void *, const struct mosquitto_message *);
 static void my_connect_callback(struct mosquitto *, void *, int);
+static void my_disconnect_callback(struct mosquitto *, void *, int);
 static void register_callbacks(struct mosquitto *);
 
 
@@ -236,7 +237,7 @@ main(int argc, char **argv)
 		pidfile_remove(mr_pidfile);
 		fclose(logfile);
 		fanctl(FAN_OFF, NULL);
-		term_led_act(1);/* value 1 indicates failure */
+		term_led_act(true);/* value true indicates failure */
 		exit(3);
 
 	}
@@ -256,7 +257,7 @@ main(int argc, char **argv)
 		/* -1 = 1000ms /  0 = instant return */
 		while((mqloopret = MQTT_loop(mqtt_connection, 0)) != MOSQ_ERR_SUCCESS) {
 			if (mqloopret == MOSQ_ERR_CONN_LOST || mqloopret == MOSQ_ERR_NO_CONN) {
-				term_led_act(1);/* value 1 indicates failure */
+				term_led_act(true);/* value true indicates failure */
 				break;
 			} else if (mqloopret != MOSQ_ERR_SUCCESS) {
 					do_pool_sensors = false;
@@ -287,6 +288,7 @@ main(int argc, char **argv)
 				startup_led_act(10, 10); /*  XXX ugly hack*/
 			} else {
 				MQTT_log("Reconnect failure! Waiting 5secs");
+				term_led_act(true);/* value true indicates failure */
 				sleep(5);
 			}
 		}
@@ -535,6 +537,16 @@ my_log_callback(struct mosquitto *mosq, void *userdata, int level, const char *s
 
 
 static void
+my_disconnect_callback(struct mosquitto *mosq, void *userdata, int rc)
+{
+	if (rc != 0) {
+		MQTT_log("Client disconnected unexpectly rc=%d\n", rc);
+		mqtt_conn_dead = true;
+	}
+	return;
+}
+
+static void
 my_message_callback(struct mosquitto *mosq, void *userdata, const struct mosquitto_message *msg)
 {
 	mqtt_cmd_t  cmd;
@@ -669,7 +681,8 @@ static struct mosquitto *
 MQTT_reconnect(struct mosquitto *m, int *ret)
 {
 	int	mosq_ret;
-  MQTT_log("Reconnecting");
+
+  	MQTT_log("Reconnecting");
 	if ((mosq_ret = mosquitto_reconnect(m)) != MOSQ_ERR_SUCCESS) {
 		if (ret != NULL) *ret = mosq_ret;
 		return (NULL);
@@ -681,6 +694,7 @@ static void
 register_callbacks(struct mosquitto *mosq)
 {
 	mosquitto_message_callback_set(mosq, my_message_callback);
+	mosquitto_message_callback_set(mosq, my_disconnect_callback);
 	mosquitto_connect_callback_set(mosq, my_connect_callback);
 	mosquitto_publish_callback_set(mosq, my_publish_callback);
         mosquitto_subscribe_callback_set(mosq, my_subscribe_callback);
