@@ -13,13 +13,13 @@ tput clear
 while true;
 do
 	./graphing.sh update
-#	./graphing.sh daily
+	./graphing.sh daily
 	./graphing.sh auto
 #	./graphing.sh weekly
 #	./graphing.sh monthly
 	./graphing.sh custom
 
 	printf "Last update %s\n" "`date`"
-	sleep 300
+	sleep 300 # each 5min
 	tput clear
 done

@@ -1,6 +1,14 @@
 
 var refresh = false;
 var developer_mode = false;
+class Graph {
+	constructor(jq, name) {
+		this.jq = jq;
+		this.pos++;
+		this.name = name;
+		this.sorted = false;
+	}
+}
 
 function dprint(msg) {
 	if (developer_mode) {
@@ -13,10 +21,11 @@ function restore_from_cookie(cks) {
     //var cks = Cookies.getJSON('graphs_sorted');
     dprint(cks[0]);
     var objs = {};
+    var graph_list = {};
     $(".panel").each(function() {
 	var nbuf=$(this).find(".panel-heading").html();
 	var pname=nbuf.split(/[ ]/)[0]
-        objs[pname] = $(this).detach();
+        objs[pname] = new Graph($(this).detach(), pname);
         dprint("Detached "+pname);
      });
     for (var n=0; n< cks.length ;n++) {
