@@ -84,7 +84,7 @@ static sig_atomic_t unknown_signal;
 static sig_atomic_t got_SIGUSR1;
 static sig_atomic_t got_SIGTERM;
 static sig_atomic_t got_SIGCHLD;
-static unsigned short failure;
+static bool failure;
 pthread_mutex_t mqtt_connection_mutex;
 static struct mosquitto *mqtt_connection;
 
@@ -261,7 +261,7 @@ main(int argc, char **argv)
 			} else if (mqloopret != MOSQ_ERR_SUCCESS) {
 					do_pool_sensors = false;
 					main_loop = false;
-					failure = 1;
+					failure = true;
 					break;
 			}
 		}
@@ -327,7 +327,7 @@ main(int argc, char **argv)
 	pidfile_remove(mr_pidfile);
 	fanctl(FAN_OFF, NULL);
 	term_led_act(failure);
-	MQTT_log("Quitting");
+	MQTT_log("Quitting %s", ((failure==true)?"With failure state":""));
 	if (shutdown_rpi) {
 		MQTT_log("Calling shutdown of the machine");
 		fflush(logfile);

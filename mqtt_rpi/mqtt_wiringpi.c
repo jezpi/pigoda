@@ -150,11 +150,11 @@ startup_fanctl()
 
 
 int 
-term_led_act(short failure) 
+term_led_act(bool failure) 
 {
 	if (notify_gpio != NULL)
 		digitalWrite(notify_gpio->g_pin, LOW);
-	if (failure && failure_gpio != NULL)
+	if (failure == true && failure_gpio != NULL)
 		digitalWrite(failure_gpio->g_pin, HIGH);
 }
 
