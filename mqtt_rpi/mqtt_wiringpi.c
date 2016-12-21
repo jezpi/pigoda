@@ -19,8 +19,9 @@
 
 #include <sys/types.h>
 #include <stdio.h>
-
+#include <stdbool.h>
 #include <wiringPi.h>
+
 #include "mqtt_parser.h"
 #include "mqtt.h"
 #include "mqtt_wiringpi.h"
