@@ -39,8 +39,6 @@ An example config file included below:
 
 %YAML 1.1
 ---
-# some variables
-# A list of tasty fruits
 pidfile: "/var/run/mqtt_rpi.pid"
 logfile: "/var/log/mqtt_rpi.log"
 debug: 4
