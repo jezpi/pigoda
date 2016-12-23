@@ -35,7 +35,7 @@ It has few useful command line options described below.
 #### Config file directives:
 
 An example config file included below:
-```
+```yaml
 
 %YAML 1.1
 ---
@@ -90,6 +90,7 @@ gpio:
 ...
 
 ```
+
 
 	   
 #### Status:
