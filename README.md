@@ -90,8 +90,27 @@ gpio:
 ...
 
 ```
+Let's describe first set and meaning of system related variables
+
+Variable name | Possible values | Description
+--------------|-----------------|------------
+pidfile	      | STRING | Includes a valid path in \*NIX like system. Defaults to  > /var/run/mqtt_rpi.pid
+logfile       | STRING | Defaults to "/var/log/mqtt_rpi.log"
+debug         | NUMERIC | When greater than 0 activates extra debug messages
+daemon        | BOOL | daemon mode
+delay         | NUMERIC | Defines delay in a pooling loop. Defaults to 5000000
 
 
+Other variables are related to MQTT connection, like identity user and password used to authenticate on a remote mqtt_host
+
+Variable name | Possible values | Description
+--------------|-----------------|------------
+identity | STRING | Change this variable in case of having more than one station.
+mqtt_host| STRING | A valid FQDN address for *MQTT* broker. Defaults to "localhost".
+mqtt_port| NUMERIC | Port number. Defaults to /1883/.
+mqtt_user| STRING | User name used to authenticate the client.
+mqtt_password| STRING | Password.
+mqtt_keepalive| NUMERIC | Delay between keep alive probes
 	   
 #### Status:
 Ready to use version is available. However it's missing some documentation
