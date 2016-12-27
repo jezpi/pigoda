@@ -22,6 +22,93 @@ mqtt_rpi is a broker client as all software pieces written here.
          it sends statistics from previously configured gpios/i2c devices
 	 specified in a config file *mqtt_rpi.yaml*. Also it handles some
          basic commands including relay switch on and off.
+#### Usage
+Normally it is supposed to be invoked via startscript placed in */etc/init.d/pigoda*
+It has few useful command line options described below. 
+-V Prints build date and time usage() information and then exits with exit(2) code EX_USAGE.
+-c Path to config file. If not defined defaults to <code>/etc/mqtt_rpi.yaml</code>
+-v Verbose mode. (not implemented yet)
+-d Debug mode. (Ditto)
+-f Stay in foreground
+
+
+#### Config file directives:
+
+An example config file included below:
+```yaml
+
+%YAML 1.1
+---
+pidfile: "/var/run/mqtt_rpi.pid"
+logfile: "/var/log/mqtt_rpi.log"
+debug: 4
+daemon: false
+delay: 5000000
+identity: "mrpi_pooler"
+mqtt_host: "localhost"
+mqtt_port: 1883
+mqtt_user: "mqtt_rpi"
+mqtt_password: "CHANGE_ME"
+mqtt_keepalive: 120
+# configuration of channels
+sensors:
+        - name: "tempin"
+          type: "ds18b20"
+          address: "28-00000XXXXXXX"
+          channel: "/environment/tempin"
+        - name: "tempout"
+          type: "ds18b20"
+          address: "28-0000XXXXXXXX"
+          channel: "/environment/tempout"
+        - name: "pressure"
+          type: "i2c"
+          i2ctype: "bmp85"
+          channel: "/environment/pressure"
+        - name: "light"
+          type: "i2c"
+          i2ctype: "pcf8591"
+          address: "0x48"
+          config: "0"
+          channel: "/environment/light"
+gpio:
+        - name: "green_led"
+          gpio_pin: 2
+          type: "failure"
+        - name: "red_led"
+          gpio_pin: 0
+          type: "notify"
+        - name: "pir_case"
+          gpio_pin: 6
+          type: "pir_sensor"
+        - name: "power button"
+          type: "pwr_btn"
+          gpio_pin: 5
+
+
+...
+
+```
+Let's describe first set and meaning of system related variables
+
+Variable name | Possible values | Description
+--------------|-----------------|------------
+pidfile	      | STRING | Includes a valid path in \*NIX like system. Defaults to  > /var/run/mqtt_rpi.pid
+logfile       | STRING | Defaults to "/var/log/mqtt_rpi.log"
+debug         | NUMERIC | When greater than 0 activates extra debug messages
+daemon        | BOOL | daemon mode
+delay         | NUMERIC | Defines delay in a pooling loop. Defaults to 5000000
+
+
+Other variables are related to MQTT connection, like identity user and password used to authenticate on a remote mqtt_host
+
+Variable name | Possible values | Description
+--------------|-----------------|------------
+identity | STRING | Change this variable in case of having more than one station.
+mqtt_host| STRING | A valid FQDN address for *MQTT* broker. Defaults to "localhost".
+mqtt_port| NUMERIC | Port number. Defaults to /1883/.
+mqtt_user| STRING | User name used to authenticate the client.
+mqtt_password| STRING | Password.
+mqtt_keepalive| NUMERIC | Delay between keep alive probes
 	   
 #### Status:
 Ready to use version is available. However it's missing some documentation

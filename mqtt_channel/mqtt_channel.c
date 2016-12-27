@@ -28,7 +28,6 @@
 #include "mqtt_ADT.h"
 #include "mqtt.h"
 
-/* Thingspeak */
 
 #ifdef MQTTDEBUG /* debugging options */
 static unsigned short DEBUG_FLAG=0x4;
@@ -42,11 +41,6 @@ struct mq_ch_screen screen_data;
 
 
 
-#ifdef THINGSPEAK
-struct ts_MQTT {
-	ts_context_t *ctx;
-} *TSMQTT;
-#endif
 
 
 static mqtt_hnd_t 	 Mosquitto;
@@ -95,10 +89,6 @@ static int update_screen_stats(struct mq_ch_screen *) ;
 #endif /* NCURSES */
 
 static struct mosquitto * MQTT_reconnect(struct mosquitto *m, int *ret);
-#ifdef THINGSPEAK
-static int MQTT_to_ts(struct ts_MQTT *, MQTT_data_type_t type, float value);
-static struct ts_MQTT * MQTT_to_ts_init(const char *apikey, int channel);
-#endif /* ! THINGSPEAK */
 static bool mqtt_rpi_init(const char *progname, char *conf);
 mqtt_cmd_t mqtt_proc_msg(char *, char *);
 char * mqtt_poli_proc_msg(char *, char *);
@@ -168,11 +158,6 @@ main(int argc, char **argv)
 		);
 	else
 		MQTT_log("Not storing to sqlite3 DB\n");
-
-#ifdef THINGSPEAK
-	TSMQTT = MQTT_to_ts_init("", );
-	/* NOTUSED */
-#endif
 
 	MQTT_init_topics(Mosquitto.mqh_mos, myMQTT_conf.mqtt_channels);
 	/*MQTT_sub(Mosquitto.mqh_mos, "/environment/#" );*/
@@ -656,46 +641,6 @@ MQTT_reconnect(struct mosquitto *m, int *ret)
 
 
 
-#ifdef THINGSPEAK
-static struct ts_MQTT *
-MQTT_to_ts_init(const char *apikey, int channel)
-{
-	struct ts_MQTT *tsm;
-
-	tsm = malloc(sizeof(struct ts_MQTT));
-	tsm->ctx = ts_create_context(apikey, channel);
-	return (tsm);
-
-}
-
-static int 
-MQTT_to_ts(struct ts_MQTT *tsm, MQTT_data_type_t type, float value)
-{
-	ts_datapoint_t data;
-	
-	if (type == T_TEMPOUT) {
-		ts_set_value_f32(&data, value);
-		ts_datastream_update(tsm->ctx, 0, "field1", &data);
-	} else if (type == T_PRESSURE) {
-		ts_set_value_f32(&data, value);
-		ts_datastream_update(tsm->ctx, 0, "field4", &data);
-	} else if (type == T_TEMPIN) {
-		ts_set_value_f32(&data, value);
-		ts_datastream_update(tsm->ctx, 0, "field1", &data);
-	} else if (type == T_TEMPOUT) {
-		ts_set_value_f32(&data, (int)value);
-		ts_datastream_update(tsm->ctx, 0, "field3", &data);
-
-	} else if (type == T_LIGHT) {
-		ts_set_value_i32(&data, (int)value);
-		ts_datastream_update(tsm->ctx, 0, "field5", &data);
-	} else {
-		/* TODO unknown type error reporting */
-		return (-1);
-	}
-	return (0);
-}
-#endif /* ! THINGSPEAK */
 
 static bool
 mqtt_rpi_init(const char *progname, char *conf)
@@ -947,7 +892,9 @@ MQTT_printf(const char *fmt, ...)
 	int	ret;
 	size_t	fmtlen;
 	char	*fmtbuf, *p;
-	char	pbuf[BUFSIZ];
+	char	pbuf[BUFSIZ], timestamp_buf[BUFSIZ];
+	time_t  timestamp;
+	struct  tm *timep;
 
 	fmtbuf = strdup(fmt);
 	fmtlen = strlen(fmtbuf);
@@ -957,6 +904,8 @@ MQTT_printf(const char *fmt, ...)
 	*(fmtbuf+fmtlen) = '\0';
 	*/
 
+	timep = localtime(&timestamp);
+	strftime(timestamp_buf, sizeof timestamp_buf, "%H:%M:%S %d-%m ", timep);
 	va_start(vargs, fmt);
 	ret = vsnprintf(pbuf, sizeof pbuf, fmt, vargs);
 	va_end(vargs);
@@ -964,7 +913,7 @@ MQTT_printf(const char *fmt, ...)
 		*p = '\0';
 	}
 	if (screen_data.win != NULL) {
-		wprintw(screen_data.win, "%s\n", pbuf);
+		wprintw(screen_data.win, "%s>%s\n", timestamp_buf, pbuf);
 		wrefresh(screen_data.win);
 	} else {
 		fprintf(stderr, "%s\n", pbuf);

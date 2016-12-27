@@ -334,10 +334,10 @@ graph_vc_temp_badacz_weekly() {
 graph_temprel_custom() {
 echo "=> Creating png graph - temperature relation"
 rrd_graph_def ${PNG_GRAPH_PATH}/temp_rel.png \
-	-w 785 -h 420 -a PNG \
+	-w 885 -h 420 -a PNG \
 	--slope-mode \
-	--start 'now-92h' --end now \
-	--title="Relation temperature " \
+	--start 'now-92h' --end 'now-60s' \
+	--title="Temperature relation" \
 	--watermark="Date `date`" \
 	--alt-autoscale \
 	DEF:vc_temp_badacz=${RRD_DB_PATH}/vc_temp_badacz.rrd:vc_temp_badacz:AVERAGE \
@@ -352,10 +352,10 @@ rrd_graph_def ${PNG_GRAPH_PATH}/temp_rel.png \
 	LINE2:vc_temp_badacz#D40000:"temp vc_core badacz (C)" \
 	LINE2:vc_temp_rpitrois#063F68:"temp vc_core rpitrois (C)" \
 	LINE1:vctemplast#C837AB:"last temp (C)":dashes \
-	AREA:temp_in#FF00FF:"temp inside(C)\l" \
-	AREA:temp_out#0080FF:"temp outside(C)\t" \
-	AREA:temp_g#FFB300:"temp l24(C)\t" \
-	LINE1:tempoutlast#FF6600:"temp outside last (C)\t" \
+	AREA:temp_in#FF00FF:"made (C)\l" \
+	AREA:temp_out#0080FF:"pigoda box (C)\t" \
+	AREA:temp_g#FFB300:"home (C)\t" \
+	LINE1:tempoutlast#FF6600:"outside last (C)\t" \
 	LINE1:tempinlast#00CCFF:"temp inside last (C)\n" \
 	GPRINT:vc_temp_badacz:MAX:"Max vc_core\: %5.2lf\n" \
 	GPRINT:temp_in:MAX:"Max inside\: %5.2lf\n" \
