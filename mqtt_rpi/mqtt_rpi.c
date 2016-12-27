@@ -294,7 +294,7 @@ main(int argc, char **argv)
 		}
 		if (got_SIGTERM) {
 			main_loop = false;
-			fprintf(stderr, "%s) got SIGTERM\n", __PROGNAME);
+			MQTT_printf("%s) got SIGTERM\n", __PROGNAME);
 			got_SIGTERM = 0;
 			MQTT_pub(mqtt_connection, "/network/broadcast/mqtt_rpi", true, "off");
 		}
@@ -359,6 +359,7 @@ MQTT_loop(void *m, int tout)
 
 				if (errno == EHOSTUNREACH || errno == ENETUNREACH || errno == ENETRESET || errno == ENETDOWN || errno == ENOTCONN) {
 					mqtt_conn_dead = true;/* XXX temporal */
+					main_loop = true;
 					errno = 0;
 					MQTT_log("Connection lost. Reconnecting in a while...\n");
 				} else {
@@ -532,6 +533,9 @@ my_log_callback(struct mosquitto *mosq, void *userdata, int level, const char *s
 {
 	/* Pring all log messages regardless of level. */
 	MQTT_printf(" %d - %s\n", level, str);
+	if (level != 16) {
+		MQTT_log(" %d - %s\n", level, str);
+	}
 	return;
 }
 
@@ -693,12 +697,12 @@ MQTT_reconnect(struct mosquitto *m, int *ret)
 static void
 register_callbacks(struct mosquitto *mosq)
 {
-	mosquitto_message_callback_set(mosq, my_message_callback);
-	mosquitto_message_callback_set(mosq, my_disconnect_callback);
 	mosquitto_connect_callback_set(mosq, my_connect_callback);
+	mosquitto_disconnect_callback_set(mosq, my_disconnect_callback);
+        mosquitto_log_callback_set(mosq, my_log_callback);
+	mosquitto_message_callback_set(mosq, my_message_callback);
 	mosquitto_publish_callback_set(mosq, my_publish_callback);
         mosquitto_subscribe_callback_set(mosq, my_subscribe_callback);
-        mosquitto_log_callback_set(mosq, my_log_callback);
 	return;
 }
 
@@ -1046,7 +1050,7 @@ MQTT_log(const char *fmt, ...)
 
 	time(&curtime);
 	tmp = localtime(&curtime);
-	strftime(timebuf, sizeof timebuf, "%H:%M:%S %d-%m-%y %z", tmp);
+	strftime(timebuf, sizeof timebuf, "%H:%M:%S %d-%m-%y %z ", tmp);
 	va_start(vargs, fmt);
 	ret = vsnprintf(pbuf, sizeof pbuf, fmt, vargs);
 	va_end(vargs);
@@ -1058,7 +1062,7 @@ MQTT_log(const char *fmt, ...)
 	 * 	case LOG_FILE:
 	 * 	...
 	 */
-	fprintf(logfile, "%s  %s\n", timebuf, pbuf);
+	fprintf(logfile, "%s%s\n", timebuf, pbuf);
 	fflush(logfile);
 	return (ret);
 }
