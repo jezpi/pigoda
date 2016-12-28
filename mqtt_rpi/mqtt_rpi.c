@@ -87,6 +87,7 @@ static sig_atomic_t got_SIGCHLD;
 static bool failure;
 pthread_mutex_t mqtt_connection_mutex;
 static struct mosquitto *mqtt_connection;
+static char quit_msg_buf[BUFSIZ];
 
 mqtt_cmd_t mqtt_proc_msg(char *, char *);
 
@@ -117,7 +118,9 @@ static void sig_hnd(int);
 static void usage(void);
 static void version(void);
 static void shutdown_linux(const char *);
+static int quit_with_reason(const char *fmt, ...);
 
+const char * print_quit_msg();
 static int pool_sensors(struct mosquitto *mosq);
 int fork_mqtt_pir(struct pir_config *);
 static void siginfo(int signo, siginfo_t *info, void *context);
@@ -261,7 +264,7 @@ main(int argc, char **argv)
 				break;
 			} else if (mqloopret != MOSQ_ERR_SUCCESS) {
 					do_pool_sensors = false;
-					main_loop = false;
+					quit_with_reason("return from MQTT_loop with unrecoverable failure state");
 					failure = true;
 					break;
 			}
@@ -293,7 +296,7 @@ main(int argc, char **argv)
 			}
 		}
 		if (got_SIGTERM) {
-			main_loop = false;
+			quit_with_reason("Got SIGTERM");
 			MQTT_printf("%s) got SIGTERM\n", __PROGNAME);
 			got_SIGTERM = 0;
 			MQTT_pub(mqtt_connection, "/network/broadcast/mqtt_rpi", true, "off");
@@ -313,7 +316,7 @@ main(int argc, char **argv)
 		}
 		if (poll_pwr_btn() > 0) {
 			flash_led(FAILURE_LED, HIGH);
-			main_loop = false;
+			quit_with_reason("power button pushed!");
 			shutdown_rpi = true;
 			MQTT_printf("Shutdown\n");
 		}
@@ -330,6 +333,7 @@ main(int argc, char **argv)
 	fanctl(FAN_OFF, NULL);
 	term_led_act(failure);
 	MQTT_log("Quitting %s", ((failure==true)?"With failure state":""));
+	MQTT_log("Quit reason: %s\n", print_quit_msg());
 	if (shutdown_rpi) {
 		MQTT_log("Calling shutdown of the machine");
 		fflush(logfile);
@@ -364,27 +368,25 @@ MQTT_loop(void *m, int tout)
 					MQTT_log("Connection lost. Reconnecting in a while...\n");
 				} else {
 					MQTT_log("System error (errno=%d)=%s\n", errno, strerror(errno));
-					main_loop = false;
+					quit_with_reason("System error (errno=%d)=%s\n", errno, strerror(errno));
 				}
 				break;
 			case MOSQ_ERR_INVAL:
 				MQTT_log( "input parametrs invalid\n");
-				main_loop = false;
+				quit_with_reason("mosquitto_loop failure = %d", ret);
 				break;
 			case MOSQ_ERR_NOMEM:
 				MQTT_log( "Memory condition\n");
-				main_loop = false;
+				quit_with_reason("mosquitto_loop failure = %d", ret);
 				break;
 			case MOSQ_ERR_CONN_LOST:
 				MQTT_printf("MQTT_loop: Connection lost (%d)\n", errno);
 				MQTT_log( "MQTT_loop: Connection lost (%d)\n", errno);
-				/*main_loop = false; */
 				mqtt_conn_dead = true;
 				break;
 			case MOSQ_ERR_NO_CONN:
 				MQTT_printf("No connection (%d)\n", errno);
 				MQTT_log( "No connection lost\n");
-				/*main_loop = false;*/
 				mqtt_conn_dead = true;
 			  break;
 			case MOSQ_ERR_SUCCESS:
@@ -392,21 +394,20 @@ MQTT_loop(void *m, int tout)
 				break;
 			case MOSQ_ERR_AUTH:
 				MQTT_log( "Authentication error\n");
-				main_loop = false;
+				quit_with_reason("mosquitto_loop failure = %d", ret);
 				break;
 			case MOSQ_ERR_ACL_DENIED:
 				MQTT_log( "ACL denied\n");
-				main_loop = false;
+				quit_with_reason("mosquitto_loop failure = %d", ret);
 				break;
 			case MOSQ_ERR_CONN_REFUSED:
 				MQTT_log( "MQTT_loop: Connection refused\n");
 				MQTT_printf( "MQTT_loop: Connection refused\n");
-				mqtt_conn_dead = true;/* XXX temporal */
-				/*main_loop = false;*/
+				mqtt_conn_dead = true;
 				break;
 			default:
 				MQTT_log( "unknown ret code %d\n", ret);
-				main_loop = false;
+				quit_with_reason("mosquitto_loop failure = %d", ret);
 		}
 	return (ret);
 }
@@ -567,11 +568,11 @@ my_message_callback(struct mosquitto *mosq, void *userdata, const struct mosquit
 				break;
 			case CMD_HALT:
 				shutdown_rpi = true;
-				main_loop = false;
+				quit_with_reason("Received HALT command via MQTT");
 				MQTT_printf("Shutdown triggered via MQTT\n");
 				break;
 			case CMD_QUIT:
-				main_loop = false;
+				quit_with_reason("Received QUIT command via MQTT");
 				break;
 			case CMD_FAN:
 				if (!strcasecmp(msg->payload, "on")) {
@@ -1032,7 +1033,6 @@ siginfo(int signo, siginfo_t *info, void *context)
 {
 	fprintf(stdout, "%d %s %s\n", signo, context, strsignal(signo));
 	fflush(stdout);
-	main_loop = false;
 	return ;
 }
 
@@ -1064,6 +1064,31 @@ MQTT_log(const char *fmt, ...)
 	 */
 	fprintf(logfile, "%s%s\n", timebuf, pbuf);
 	fflush(logfile);
+	return (ret);
+}
+
+const char *
+print_quit_msg()
+{
+	return (quit_msg_buf);
+}
+
+static int
+quit_with_reason(const char *fmt, ...)
+{
+	va_list vargs;
+	int	ret;
+	size_t	fmtlen;
+	char	*fmtbuf, *p;
+	char	pbuf[BUFSIZ];
+
+	va_start(vargs, fmt);
+	ret = vsnprintf(quit_msg_buf, sizeof quit_msg_buf, fmt, vargs);
+	va_end(vargs);
+	if ((p = strrchr(quit_msg_buf, '\n')) != NULL) {
+		*p = '\0';
+	}
+	main_loop = false;
 	return (ret);
 }
 
