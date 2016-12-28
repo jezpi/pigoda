@@ -146,6 +146,8 @@ yaml_assign_scalar(yaml_event_t *t)
 
 				if (!strcasecmp(t->data.scalar.value, "print")) {
 					cur_topic->t_action = TP_PRINT;
+				} else if (!strcasecmp(t->data.scalar.value, "log")) {
+					cur_topic->t_action = TP_LOG;
 				} else if (!strcasecmp(t->data.scalar.value, "store")) {
 					cur_topic->t_action = TP_STORE;
 				} else if (!strcasecmp(t->data.scalar.value, "alert")) {
@@ -302,4 +304,5 @@ print_resume(void)
 		tp = tp->t_next;
 	} while (tp != NULL);
 	printf("|\n======================================================\n");
+	return;
 }
