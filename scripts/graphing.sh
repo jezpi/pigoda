@@ -2,6 +2,8 @@
 
 . ./pigoda_rrd.inc.sh
 : ${VERBOSE:=0}
+declare -a alltables
+EXCLUDE_LIST="dht11_humidity pid_20661_pmem pid_20661_cpu dth11_temp pid_20661_vsz tempin_guerni espldr vc_temp_rpitrois light_box laptop_fan laptop_temp humidity mic_guerni micguernilaptop"
 
 ifverbose () {
 	local input
@@ -676,6 +678,30 @@ usage() {
 	echo "graphing.sh commands: [custom|auto|daily|weekly|monthly] [ddname]"
 }
 
+
+check_exclude () {
+	local ret=0;
+	local arg=${1:?too few arguments}
+	for a in $EXCLUDE_LIST;
+	do
+		if [ "$a" = "$arg" ]; then
+			ret=1;
+		fi
+	done
+	return ${ret:-0}
+}
+get_dbtables () {
+	local sqlitedb=${1:?too few arguments};
+	local DONT_EXCLUDE=${2:-0}
+	declare -n n;
+	: ${n:=0}
+	for t in $(sqlite3 ${sqlitedb} '.tables'); 
+	do
+		if  check_exclude $t; then
+			: ${alltables[$((n++))]=$t}
+		fi
+	done
+}
 ######################################
 # main
 #############
@@ -685,12 +711,14 @@ if [ -z ${1}  ]; then
 	exit 64;
 fi
 
+get_dbtables "${SQLITE_DB_PATH}";
+
 for cmd in $@ 
 do
 	case $cmd in
 		update)
 			echo "=> Updating graphs"
-			for t in $(sqlite3 /var/db/pigoda/sensorsv2.db '.tables'); 
+			for t in ${alltables[@]};
 			do
 				echo "==> Updating \"${t}\""
 				updatecnt=$(update_graphs $t  | wc -l)
@@ -703,7 +731,7 @@ do
 		monthly)
 			echo "=> Creating \"${PNG_GRAPH_PATH}/graphs_monthly.html\""
 			:> ${PNG_GRAPH_PATH}/graphs_monthly.html
-			for t in $(sqlite3 /var/db/pigoda/sensorsv2.db '.tables'); 
+			for t in ${alltables[@]};
 			do 
 				echo "==> Drawing \"${t}\""
 				html_links "monthly" "${t}"
@@ -718,7 +746,7 @@ do
 		weekly)
 			echo "Creating \"${PNG_GRAPH_PATH}/graphs_weekly.html\""
 			:> ${PNG_GRAPH_PATH}/graphs_weekly.html
-			for t in $(sqlite3 /var/db/pigoda/sensorsv2.db '.tables'); 
+			for t in  ${alltables[@]};
 			do 
 				
 				echo "==> Drawing \"${t}\""
@@ -734,7 +762,7 @@ do
 
 			graph_pressure_daily;
 			:> ${PNG_GRAPH_PATH}/graphs_daily.html
-			for t in $(sqlite3 /var/db/pigoda/sensorsv2.db '.tables'); 
+			for t in   ${alltables[@]};
 			do 
 				
 				echo "==> Drawing \"${t}\""
@@ -755,7 +783,7 @@ do
 			;;
 		auto)
 			:> ${PNG_GRAPH_PATH}/graphs_auto.html
-			for t in $(sqlite3 /var/db/pigoda/sensorsv2.db '.tables'); 
+			for t in ${alltables[@]};
 			do 
 				
 				echo "==> $t"; 
