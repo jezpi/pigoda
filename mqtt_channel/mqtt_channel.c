@@ -157,7 +157,7 @@ main(int argc, char **argv)
 			(myMQTT_conf.sqlite3_db == NULL?"/var/db/pigoda/sensors.db":myMQTT_conf.sqlite3_db)
 		);
 	else
-		MQTT_log("Not storing to sqlite3 DB\n");
+		MQTT_log("Not storing to sqlite3 DB");
 
 	MQTT_init_topics(Mosquitto.mqh_mos, myMQTT_conf.mqtt_channels);
 	/*MQTT_sub(Mosquitto.mqh_mos, "/environment/#" );*/
@@ -273,7 +273,7 @@ MQTT_loop(void *m, int timeout)
 
 static void my_publish_callback(struct mosquitto *mosq, void *con, int mid)
 {
-	MQTT_log( "DEBUG: published mid=%d\n", mid);
+	MQTT_log( "DEBUG: published mid=%d", mid);
 	return ;
 }
 
@@ -297,7 +297,6 @@ my_subscribe_callback(struct mosquitto *mosq, void *userdata, int mid, int qos_c
 	for(i=1; i<qos_count; i++){
 		MQTT_log( ", %d", granted_qos[i]);
 	}
-	MQTT_log( "\n");
 }
 
 char * 
@@ -410,7 +409,7 @@ mqtt_proc_msg(char *topic, char *payload)
 
 		}
 		if (pstate == ST_ERR) {
-			MQTT_log("Cmd parser error on \"%s\":%d\n", topic, topic_cnt);
+			MQTT_log("Cmd parser error on \"%s\":%d", topic, topic_cnt);
 			break;
 		}
 	}
@@ -439,7 +438,8 @@ static void
 my_log_callback(struct mosquitto *mosq, void *userdata, int level, const char *str)
 {
 	/* Pring all log messages regardless of level. */
-	MQTT_log(" %d - %s\n", level, str);
+	if (verbose_mode == true)
+		MQTT_log(" %d - %s", level, str);
 	return;
 }
 
@@ -458,6 +458,9 @@ my_message_callback(struct mosquitto *mosq, void *userdata, const struct mosquit
 	if (msg->payloadlen){
 		if (( tp = topic_find(myMQTT_conf.mqtt_channels, msg->topic)) != NULL) {
 			switch(tp->t_action) {
+				case TP_LOG:
+					MQTT_log("%s = %s\n", msg->topic, msg->payload);
+					break;
 				case TP_PRINT:
 					MQTT_printf("%s = %s\n", msg->topic, msg->payload);
 					break;
@@ -810,7 +813,6 @@ siginfo(int signo, siginfo_t *info, void *context)
 {
 	fprintf(stdout, "%d %s %s\n", signo, context, strsignal(signo));
 	fflush(stdout);
-	main_loop = false;
 	return ;
 }
 
@@ -854,10 +856,15 @@ MQTT_debug(const char *fmt, ...)
 	int 	ret;
 	size_t	fmtlen;
 	char	*fmtbuf, *p;
-	char	pbuf[BUFSIZ];
+	char	pbuf[BUFSIZ], timestamp_buf[BUFSIZ];
+	time_t	curtime;
+	struct tm *tmp;
 
 	fmtbuf = strdup(fmt);
 	fmtlen = strlen(fmtbuf);
+	time(&curtime);
+	tmp = localtime(&curtime);
+	strftime(timestamp_buf, sizeof timestamp_buf, "%H:%M:%S %d-%m", tmp);
 	/*
 	*(fmtbuf+fmtlen) = '\0';
 	fmtlen--;
@@ -873,13 +880,14 @@ MQTT_debug(const char *fmt, ...)
 	/*printf("%s\n", pbuf);*/
 	if (verbose_mode == true)  {
 		if (screen_data.win != NULL) {
-			wprintw(screen_data.win, "%s\n", pbuf);
+			wprintw(screen_data.win, "%s (DEBUG)> %s\n", timestamp_buf, pbuf);
 			wrefresh(screen_data.win);
-		} else
-			fprintf(stderr, "%s\n", pbuf);
+		} else {
+			fprintf(stderr, "%s (DEBUG)> %s\n", timestamp_buf, pbuf);
+		}
 	}
 #ifdef MQTTDEBUG
-	fprintf(logfile, "%s\n", pbuf);
+	fprintf(logfile, "%s (DEBUG)> %s\n", timestamp_buf, pbuf);
 	fflush(logfile);
 #endif
 	return (ret);
@@ -904,8 +912,9 @@ MQTT_printf(const char *fmt, ...)
 	*(fmtbuf+fmtlen) = '\0';
 	*/
 
+	time(&timestamp);
 	timep = localtime(&timestamp);
-	strftime(timestamp_buf, sizeof timestamp_buf, "%H:%M:%S %d-%m ", timep);
+	strftime(timestamp_buf, sizeof timestamp_buf, "%H:%M:%S %d-%m", timep);
 	va_start(vargs, fmt);
 	ret = vsnprintf(pbuf, sizeof pbuf, fmt, vargs);
 	va_end(vargs);
@@ -913,13 +922,13 @@ MQTT_printf(const char *fmt, ...)
 		*p = '\0';
 	}
 	if (screen_data.win != NULL) {
-		wprintw(screen_data.win, "%s>%s\n", timestamp_buf, pbuf);
+		wprintw(screen_data.win, "%s> %s\n", timestamp_buf, pbuf);
 		wrefresh(screen_data.win);
 	} else {
-		fprintf(stderr, "%s\n", pbuf);
+		fprintf(stdout, "%s\n", pbuf);
 	}
 #ifdef MQTTDEBUG
-	fprintf(logfile, "%s\n", pbuf);
+	fprintf(logfile, "STDOUT: %s\n", pbuf);
 	fflush(logfile);
 #endif
 	return (ret);

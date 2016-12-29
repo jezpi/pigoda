@@ -1,7 +1,7 @@
 #ifndef _MQTT_ADT_H_ 
 #define  _MQTT_ADT_H_ 
 
-typedef enum    {TP_PRINT=0x2, TP_STORE=0x4, TP_ALERT=0x8, TP_SKIP=0xf} topic_action_t;
+typedef enum    {TP_PRINT=0x2, TP_STORE=0x4, TP_ALERT=0x8, TP_SKIP=0x10, TP_LOG=20} topic_action_t;
 struct topic {
 	char 	*t_name;
 	topic_action_t t_action;
