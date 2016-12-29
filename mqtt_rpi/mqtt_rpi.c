@@ -669,7 +669,7 @@ MQTT_init(mqtt_hnd_t *m, bool c_sess, const char *id)
 
 	pthread_mutex_init(&mqtt_connection_mutex, NULL);
 	pthread_mutex_lock(&mqtt_connection_mutex);
-	if ((mosq_ret = mosquitto_connect(m->mqh_mos, myMQTT_conf.mqtt_host, myMQTT_conf.mqtt_port, 600)) == MOSQ_ERR_SUCCESS) {
+	if ((mosq_ret = mosquitto_connect(m->mqh_mos, myMQTT_conf.mqtt_host, myMQTT_conf.mqtt_port, myMQTT_conf.mqtt_keepalive)) == MOSQ_ERR_SUCCESS) {
 		pthread_mutex_unlock(&mqtt_connection_mutex);
 		return (m->mqh_mos);
 	} else {

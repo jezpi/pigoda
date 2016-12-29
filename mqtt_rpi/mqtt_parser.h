@@ -51,6 +51,7 @@ typedef struct mqtt_global_config_t {
 	const char 	*mqtt_user;
 	const char 	*mqtt_password;
 	unsigned short 	 mqtt_port;
+	unsigned int	 mqtt_keepalive;
 	unsigned int 	 pool_sensors_delay;
 	sensors_t 	*sensors;
 	gpios_t 	*gpios;
