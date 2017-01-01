@@ -1,7 +1,8 @@
 #!/usr/bin/env /usr/bin/python2
 
-import rrdtool,time,os,sys,datetime,sqlite3;
-PNG_GRAPH_PATH=os.getenv("PNG_GRAPH_PATH", "/var/www/pigoda");
+import rrdtool,time,os,sys,datetime,sqlite3,ujson;
+import time
+PNG_GRAPH_PATH=os.getenv("PNG_GRAPH_PATH", "/var/www/pigoda/");
 
 
 def printoff(off):
@@ -9,7 +10,8 @@ def printoff(off):
 
 
 def graph_unknown(ds_name, startdef='now-1d', enddef='now-60s'):
-	rrdtool.graph(PNG_GRAPH_PATH+"/"+ds_name+".png", 
+	file_path=PNG_GRAPH_PATH+"/"+ds_name+"-new.png";
+	rrdtool.graph(file_path,
         	'--title', 'sensor '+ds_name+' statistics',
 		'--start', startdef,
 		'--end', enddef,
@@ -41,8 +43,8 @@ def graph_unknown(ds_name, startdef='now-1d', enddef='now-60s'):
                 'GPRINT:uval:LAST:Last\: %5.2lf ',
                 'GPRINT:uval:MIN:Min\:  %5.2lf ',
                 'GPRINT:uval:MAX:Max\:  %5.2lf ' 
-
 	);
+	print "Graph \"%s\" Created!" % (file_path);
 
 def alltables(db_conn):
 	cur = db_conn.cursor();
@@ -71,6 +73,18 @@ def get_sqlite_offset(conn, table, ts='timestamp'):
 		offset=-1;
 	return int(offset);
 
+
+def fetch_data(conn, table, offset=3600):
+	cur = conn.cursor();
+	offset=int(time.time()-offset);
+	sqquery = "SELECT timestamp,val FROM "+str(table)+" WHERE timestamp > %d ORDER BY timestamp; " %(offset);
+	cur.execute(sqquery);
+	db_data = []
+	for row in cur:
+		print str(row[0])+"\t"+str(row[1]);
+		db_data.append({"timestamp":row[0], "data":row[1]});
+	return db_data
+	
 
 #######
 # main
@@ -102,11 +116,21 @@ for tbl in alltables(conn):
 	lastupdate = get_sqlite_offset(conn, tbl);
 	tablestats[tbl] = int(lastupdate);
 
+print "%20s\t%s\t|\t%s" % ("Table name", "SQlite3 last update", "RRD last update");
 for tbl in sorted(tablestats, key=tablestats.__getitem__, reverse=True):
 	try:
 		if (ds_name == tbl):
 			print "%20s\t%s\t|\t%s" % (tbl, printoff(tablestats[tbl]), printoff(rrd_stats[tbl]['last_update']));
 			graph_unknown(ds_name);
+			cnt=0;
+			data_set = fetch_data(conn, ds_name)
+			for d in data_set:
+				cnt+=1;
+			print(cnt);
+			with open(PNG_GRAPH_PATH+"/"+"ds_"+tbl+".json", "w") as f:
+				f.write(ujson.dumps(data_set));
+			f.closed
+			#print ujson.dumps(data_set);
 	except NameError:
 		print "%20s\t%s\t|\t%s" % (tbl, printoff(tablestats[tbl]), printoff(rrd_stats[tbl]['last_update']));
 		
