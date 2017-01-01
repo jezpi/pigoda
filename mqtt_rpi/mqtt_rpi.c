@@ -263,10 +263,10 @@ main(int argc, char **argv)
 				term_led_act(true);/* value true indicates failure */
 				break;
 			} else if (mqloopret != MOSQ_ERR_SUCCESS) {
-					do_pool_sensors = false;
-					quit_with_reason("return from MQTT_loop with unrecoverable failure state");
-					failure = true;
-					break;
+				do_pool_sensors = false;
+				quit_with_reason("return from MQTT_loop with unrecoverable failure state %d", mqloopret);
+				failure = true;
+				break;
 			}
 		}
 		if (first_run && mqtt_connected) {
@@ -332,8 +332,7 @@ main(int argc, char **argv)
 	pidfile_remove(mr_pidfile);
 	fanctl(FAN_OFF, NULL);
 	term_led_act(failure);
-	MQTT_log("Quitting %s", ((failure==true)?"With failure state":""));
-	MQTT_log("Quit reason: %s\n", print_quit_msg());
+	MQTT_log("%sQuit reason: %s\n", ((failure==true)?"(FAILURE) ":""), print_quit_msg());
 	if (shutdown_rpi) {
 		MQTT_log("Calling shutdown of the machine");
 		fflush(logfile);
@@ -354,8 +353,7 @@ MQTT_loop(void *m, int tout)
 	}
 	ret = mosquitto_loop(mos, tout, 1);
 	if (ret != MOSQ_ERR_SUCCESS) {
-		fprintf(logfile, "%s(): %d\n", __func__, errno);
-		fflush(logfile);
+		MQTT_log("%s(): %d\n", __func__, errno);
 	}
 
 		switch (ret) {
@@ -365,7 +363,7 @@ MQTT_loop(void *m, int tout)
 					mqtt_conn_dead = true;/* XXX temporal */
 					main_loop = true;
 					errno = 0;
-					MQTT_log("Connection lost. Reconnecting in a while...\n");
+					MQTT_log("Connection lost (%s). Reconnecting in a while...\n", strerror(errno));
 				} else {
 					MQTT_log("System error (errno=%d)=%s\n", errno, strerror(errno));
 					quit_with_reason("System error (errno=%d)=%s\n", errno, strerror(errno));
@@ -438,7 +436,6 @@ my_subscribe_callback(struct mosquitto *mosq, void *userdata, int mid, int qos_c
 	for(i=1; i<qos_count; i++){
 		MQTT_log( ", %d", granted_qos[i]);
 	}
-	MQTT_log( "\n");
 }
 
 
@@ -672,7 +669,7 @@ MQTT_init(mqtt_hnd_t *m, bool c_sess, const char *id)
 
 	pthread_mutex_init(&mqtt_connection_mutex, NULL);
 	pthread_mutex_lock(&mqtt_connection_mutex);
-	if ((mosq_ret = mosquitto_connect(m->mqh_mos, myMQTT_conf.mqtt_host, myMQTT_conf.mqtt_port, 600)) == MOSQ_ERR_SUCCESS) {
+	if ((mosq_ret = mosquitto_connect(m->mqh_mos, myMQTT_conf.mqtt_host, myMQTT_conf.mqtt_port, myMQTT_conf.mqtt_keepalive)) == MOSQ_ERR_SUCCESS) {
 		pthread_mutex_unlock(&mqtt_connection_mutex);
 		return (m->mqh_mos);
 	} else {
@@ -888,7 +885,6 @@ mqtt_pir_th_routine(void *pir_cnf)
 			}
 		}
 		MQTT_pub(m, cnf->pir_mqtt_topic, false, "%f", (float)positive/60);
-
 	}
 
 	return (NULL);
@@ -1050,7 +1046,7 @@ MQTT_log(const char *fmt, ...)
 
 	time(&curtime);
 	tmp = localtime(&curtime);
-	strftime(timebuf, sizeof timebuf, "%H:%M:%S %d-%m-%y %z ", tmp);
+	strftime(timebuf, sizeof timebuf, "%H:%M:%S %d-%m ", tmp);
 	va_start(vargs, fmt);
 	ret = vsnprintf(pbuf, sizeof pbuf, fmt, vargs);
 	va_end(vargs);

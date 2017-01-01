@@ -32,7 +32,7 @@ mqtt_global_cfg_t myMQTT;
 enum {SCALAR_SSEQ, SCALAR_SMAP, SCALAR_MAIN} scalar_opts = SCALAR_MAIN;
 enum {
 	V_UNKNOWN, V_PIDFILE, V_LOGFILE, V_DEBUG, V_SERVER, 
-	V_MQTTUSER, V_MQTTPASS, V_MQTTPORT, V_DAEMON, V_DELAY, V_IDENTITY
+	V_MQTTUSER, V_MQTTPASS, V_MQTTPORT, V_DAEMON, V_DELAY, V_IDENTITY, V_KEEP_ALIVE
      } c_opts = V_UNKNOWN;
 
 enum {
@@ -113,6 +113,8 @@ proc_main_opt(char *scalar_value)
 		c_opts = V_MQTTPORT;
 	} else if (!strcasecmp(scalar_value, "mqtt_host")) {
 		c_opts = V_SERVER;
+	} else if (!strcasecmp(scalar_value, "mqtt_keepalive")) {
+		c_opts = V_KEEP_ALIVE;
 	} else if (!strcasecmp(scalar_value, "daemon")) {
 		c_opts = V_DAEMON;
 
@@ -160,6 +162,10 @@ proc_main_opt(char *scalar_value)
 				break;
 			case V_IDENTITY:
 				myMQTT.identity = strdup(scalar_value);
+				c_opts = V_UNKNOWN;
+				break;
+			case V_KEEP_ALIVE:
+				myMQTT.mqtt_keepalive = atoi(scalar_value);
 				c_opts = V_UNKNOWN;
 				break;
 
@@ -394,13 +400,13 @@ parse_configfile(const char *path, mqtt_global_cfg_t *myconfig)
 			debuglog = stderr;
 		}
 	}
-
 	if ((inputf = fopen(path, "r")) == NULL) {
 		fprintf(debuglog, "file not found: \"%s\"\n", path);
 		return (-1);
 	} else {
 		dprintf("%s()@ Parsing \"%s\"\n", __func__, path);
 	}
+	myMQTT.mqtt_keepalive = 60; /* some defaults */
 	yaml_parser_initialize(&parser);
 	yaml_parser_set_input_file(&parser, inputf);
 	do {
@@ -496,6 +502,7 @@ parse_configfile(const char *path, mqtt_global_cfg_t *myconfig)
 	
 	myMQTT.sensors = &sensors;
 	myMQTT.gpios = &myGPIOs;
+
 	if (myconfig != NULL) 
 		bcopy(&myMQTT, myconfig, sizeof(myMQTT));
 
