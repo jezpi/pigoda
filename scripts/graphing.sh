@@ -3,7 +3,7 @@
 . ./pigoda_rrd.inc.sh
 : ${VERBOSE:=0}
 declare -a alltables
-EXCLUDE_LIST="dht11_humidity pid_20661_pmem pid_20661_cpu dth11_temp pid_20661_vsz tempin_guerni espldr vc_temp_rpitrois light_box laptop_fan laptop_temp humidity mic_guerni micguernilaptop"
+EXCLUDE_LIST="$(cat /root/pigoda/scripts/exclude_list)"
 
 ifverbose () {
 	local input
@@ -16,6 +16,7 @@ rrd_graph_def () {
 oIFS=$IFS
 IFS='
 '
+
 	rrdtool graph $@ \
 		--font='DEFAULT:7:Ubuntu' \
 		--font='TITLE:11:Ubuntu bold' \
@@ -23,10 +24,12 @@ IFS='
 		--font='WATERMARK:8:Ubuntu' \
 		--font='LEGEND:9:Ubuntu'  \
 		--color='BACK#FAFAFA' \
+		--color='GRID#594a40' \
+		--color='MGRID#990012' \
 		--lazy \
 		--legend-position=south \
 		--legend-direction=topdown \
-		--grid-dash=1:3 \
+		--grid-dash=1:1 \
 		--slope-mode \
 		--border=0 | ifverbose
 IFS=$oIFS
@@ -124,6 +127,7 @@ graph_unknown_mly () {
 		--start 'now-30d' --end 'now-300s' \
 		--title="${name} sensor stats " \
 		--watermark="Date `date`" \
+		--x-grid DAY:1:WEEK:1:DAY:1:0:%d \
 		--alt-y-grid \
 		--alt-autoscale \
 		--graph-render-mode=normal \
@@ -175,7 +179,7 @@ graph_unknown_daily () {
 }
 
 graph_pir() {
-echo "=> Creating png graph - pir on badacz"
+	echo "=> Creating png graph - pir on badacz"
 	rrd_graph_def ${PNG_GRAPH_PATH}/pir.png \
 		-w 785 -h 120 -a PNG \
 		--slope-mode \
@@ -185,6 +189,92 @@ echo "=> Creating png graph - pir on badacz"
 		--upper-limit 1 \
 		--watermark="Date `date`" \
 		--alt-y-grid \
+		--rigid \
+		DEF:movm=${RRD_DB_PATH}/pir.rrd:pir:AVERAGE \
+		VDEF:movmavg=movm,AVERAGE \
+		VDEF:movmmax=movm,MAXIMUM \
+		VDEF:movmmin=movm,MINIMUM \
+		VDEF:movmlast=movm,LAST \
+		AREA:movm#FFC305:"Movement rate\t" \
+		LINE1:movmlast#C70039:"Last movement rate\t":dashes \
+		LINE2:movmmax#FF5733:"Max movement rate\t" \
+		LINE1:movmmin#581845:"Min movement rate\n":dashes \
+		GPRINT:movm:AVERAGE:"Avg\: %5.2lf\n" \
+		GPRINT:movm:MAX:"Max\: %5.2lf\n" \
+		GPRINT:movm:MIN:"Min\: %5.2lf\n" \
+		GPRINT:movm:LAST:"Last\: %5.2lf\n"  
+
+}
+
+graph_pir_daily() {
+	echo "=> Creating png graph - pir on badacz"
+	rrd_graph_def ${PNG_GRAPH_PATH}/pir_daily.png \
+		-w 785 -h 120 -a PNG \
+		--slope-mode \
+		--start 'now-1d' --end 'now-300s' \
+		--title="PIR sensor stats - movement rate in one second" \
+		--lower-limit 0 \
+		--upper-limit 1 \
+		--watermark="Date `date`" \
+		--alt-y-grid \
+		--rigid \
+		DEF:movm=${RRD_DB_PATH}/pir.rrd:pir:AVERAGE \
+		VDEF:movmavg=movm,AVERAGE \
+		VDEF:movmmax=movm,MAXIMUM \
+		VDEF:movmmin=movm,MINIMUM \
+		VDEF:movmlast=movm,LAST \
+		AREA:movm#FFC305:"Movement rate\t" \
+		LINE1:movmlast#C70039:"Last movement rate\t":dashes \
+		LINE2:movmmax#FF5733:"Max movement rate\t" \
+		LINE1:movmmin#581845:"Min movement rate\n":dashes \
+		GPRINT:movm:AVERAGE:"Avg\: %5.2lf\n" \
+		GPRINT:movm:MAX:"Max\: %5.2lf\n" \
+		GPRINT:movm:MIN:"Min\: %5.2lf\n" \
+		GPRINT:movm:LAST:"Last\: %5.2lf\n"  
+
+}
+
+graph_pir_weekly() {
+	echo "=> Creating png graph - pir on badacz"
+	rrd_graph_def ${PNG_GRAPH_PATH}/pir_weekly.png \
+		-w 785 -h 120 -a PNG \
+		--slope-mode \
+		--start 'now-1w' --end 'now-300s' \
+		--title="PIR sensor stats - movement rate in one second" \
+		--lower-limit 0 \
+		--upper-limit 1 \
+		--watermark="Date `date`" \
+		--alt-y-grid \
+		--rigid \
+		DEF:movm=${RRD_DB_PATH}/pir.rrd:pir:AVERAGE \
+		VDEF:movmavg=movm,AVERAGE \
+		VDEF:movmmax=movm,MAXIMUM \
+		VDEF:movmmin=movm,MINIMUM \
+		VDEF:movmlast=movm,LAST \
+		AREA:movm#FFC305:"Movement rate\t" \
+		LINE1:movmlast#C70039:"Last movement rate\t":dashes \
+		LINE2:movmmax#FF5733:"Max movement rate\t" \
+		LINE1:movmmin#581845:"Min movement rate\n":dashes \
+		GPRINT:movm:AVERAGE:"Avg\: %5.2lf\n" \
+		GPRINT:movm:MAX:"Max\: %5.2lf\n" \
+		GPRINT:movm:MIN:"Min\: %5.2lf\n" \
+		GPRINT:movm:LAST:"Last\: %5.2lf\n"  
+
+}
+
+
+graph_pir_monthly() {
+	echo "=> Creating png graph - pir on badacz"
+	rrd_graph_def ${PNG_GRAPH_PATH}/pir_monthly.png \
+		-w 785 -h 120 -a PNG \
+		--slope-mode \
+		--start 'now-4w' --end 'now-300s' \
+		--title="PIR sensor stats - movement rate in one second" \
+		--lower-limit 0 \
+		--upper-limit 1 \
+		--watermark="Date `date`" \
+		--alt-y-grid \
+		--x-grid DAY:1:WEEK:1:DAY:1:0:%d \
 		--rigid \
 		DEF:movm=${RRD_DB_PATH}/pir.rrd:pir:AVERAGE \
 		VDEF:movmavg=movm,AVERAGE \
@@ -334,12 +424,13 @@ graph_vc_temp_badacz_weekly() {
 #--rigid \
 
 graph_temprel_custom() {
-echo "=> Creating png graph - temperature relation"
+echo "=> Creating png graph - temperature relation 3 months"
 rrd_graph_def ${PNG_GRAPH_PATH}/temp_rel.png \
-	-w 885 -h 420 -a PNG \
+	-w 985 -h 420 -a PNG \
+	--x-grid WEEK:1:MONTH:1:DAY:2:0:%d \
 	--slope-mode \
-	--start 'now-92h' --end 'now-60s' \
-	--title="Temperature relation" \
+	--start 'now-82d' --end 'now-60s' \
+	--title="Temperature relation - 3 months" \
 	--watermark="Date `date`" \
 	--alt-autoscale \
 	DEF:vc_temp_badacz=${RRD_DB_PATH}/vc_temp_badacz.rrd:vc_temp_badacz:AVERAGE \
