@@ -20,7 +20,6 @@
 
 #include <mosquitto.h> /* MQTT */
 #include <yaml.h> /* config file */
-#include <sqlite3.h>
 
 #include <bsd/libutil.h> /* pidfile_open(3) etc. */
 #include <wiringPi.h> /* defs of HIGH and LOW */
@@ -31,6 +30,7 @@
 #include "mqtt_sensors.h"
 #include "mqtt_wiringpi.h"
 #include "mqtt_cmd.h"
+
 #ifdef MQTTDEBUG
 
 static bool mqtt_connected = false;
@@ -897,14 +897,13 @@ mqtt_pir_th_routine(void *pir_cnf)
 static int
 pool_sensors(struct mosquitto *mosq)
 {
-	int ret = 0;
-	int light;
-	float temp_in=0, temp_out = 0;
-	double pressure=0;
-	double value;
 	char	*endptr;
-	long pin;
-	bool 	sensor_ret = false;
+	bool     sensor_ret = false;
+	int      ret = 0;
+	int      light;
+	float    temp_in=0, temp_out = 0;
+	double   value;
+	long     pin;
 
 	sensor_t *sp;
 	sp = myMQTT_conf.sensors->sn_head;
@@ -919,16 +918,23 @@ pool_sensors(struct mosquitto *mosq)
 						value = pcf8591p_ain(sp->s_config);
 						break;
 					case I2C_BMP85:
-						value = get_pressure();
+						sensor_ret = get_pressure(&value);
 						break;
+					case I2C_SHT30:
+						sensor_ret = get_sht30(&value);
+						break;
+					default:
+						MQTT_log("\"%d\" unknown i2c type\n", sp->s_i2ctype);
 				}
 				break;
+			default:
+				MQTT_log("\"%s\" unknown sensor type\n", sp->s_name);
 
 		}
 		if (sensor_ret == true ) {
 			MQTT_pub(mosq, sp->s_channel, false, "%f", value);
 		} else {
-			MQTT_log("%s query failure\n", sp->s_name);
+			MQTT_log("\"%s\" query failure\n", sp->s_name);
 			return(-1);
 		}
 		sp = sp->s_next;
