@@ -4,7 +4,7 @@ CC=gcc
 LDFLAGS=  -lmosquitto -lyaml -lwiringPi -lbsd -lpthread
 	
 
-mqtt_rpi: mqtt_rpi.o mqtt_wiringpi.o mqtt_parse_config.o mqtt_sensors.o testBMP085.o smbus.o
+mqtt_rpi: mqtt_rpi.o mqtt_wiringpi.o mqtt_parse_config.o mqtt_sensors.o testBMP085.o smbus.o sht30.o
 	$(CC) -L/home/jez/code/lib/ $(CFLAGS) -o $@ $+  $(LDFLAGS)
 
 mqtt_rpi.o: mqtt_rpi.c
@@ -29,7 +29,8 @@ mqtt_parse_config.o: mqtt_parse_config.c
 mqtt_sensors.o: mqtt_sensors.c
 	$(CC) $(DFLAGS) $(CFLAGS) $(DFLAGS) -pipe -c $<  
 
-
+sht30.o: sht30/sht30.c
+	$(CC) $(DFLAGS) $(CFLAGS) $(DFLAGS) -pipe -c $<  
 
 mqtt_parser_test.o: mqtt_parser_test.c
 	$(CC) $(CFLAGS) -pipe -c $<  

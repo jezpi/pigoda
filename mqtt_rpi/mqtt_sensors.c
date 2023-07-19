@@ -33,6 +33,7 @@
 #include "mqtt.h"
 #include "mqtt_sensors.h"
 #include "bmp85/bmp85.h"
+#include "sht30/sht30.h"
 
 #define W1_DEVS_PATH "/sys/bus/w1/devices/"
 extern int MQTT_log(const char *, ...);
@@ -70,6 +71,9 @@ sensors_init(sensors_t *sn)
 						sp->s_st = SENS_OK;
 						/* MQTT_log */
 						break;
+					case I2C_SHT30:
+						sht30_init();
+						sp->s_st = SENS_OK;
 					default:
 						return (-1);
 				}
@@ -144,12 +148,30 @@ get_temperature(const char *ds_name, double *temp)
 
 }
 
-double
-get_pressure(void)
+bool
+get_pressure(double *pressure)
 {
 	struct bmp85 *dta;
 
-	dta = bmp85_getdata();
-	return (dta->pressure);
+	if ((dta = bmp85_getdata()) == NULL) {
+		return (false);
+	}
+	*pressure = dta->pressure;
+	free(dta);
+
+	return (true);
 }
 
+bool
+get_sht30(double *humidity)
+{
+	struct sht30 *dta;
+
+	if ((dta = sht30_getdata()) == NULL) {
+		return (false);
+	}
+	*humidity = dta->humidity;
+	free(dta);
+
+	return (true);
+}

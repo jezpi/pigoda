@@ -252,6 +252,8 @@ proc_sensors_opt(char *scalar_value)
 				cursensor->s_i2ctype = I2C_BMP85;
 			}  else if (!strcasecmp(scalar_value, "pcf8591")) {
 				cursensor->s_i2ctype = I2C_PCF8591P;
+			}  else if (!strcasecmp(scalar_value, "sht30")) {
+				cursensor->s_i2ctype = I2C_SHT30;
 			} else {
 				printf("Unsupported i2c type %s\n", scalar_value);
 				return (-1);
