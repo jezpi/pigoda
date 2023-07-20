@@ -16,5 +16,5 @@ jobs:
     - name: install dependencies
       run: sudo apt update && sudo apt install libmosquitto-dev libbsd-dev wiringpi libyaml-dev
     - name: make
-      run: make
+      run: cd mqtt_rpi && make
 
