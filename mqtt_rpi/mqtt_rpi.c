@@ -900,7 +900,6 @@ pool_sensors(struct mosquitto *mosq)
 	char	*endptr;
 	bool     sensor_ret = false;
 	int      ret = 0;
-	int      light;
 	float    temp_in=0, temp_out = 0;
 	double   value;
 	long     pin;
