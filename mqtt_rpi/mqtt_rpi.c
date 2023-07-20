@@ -1034,7 +1034,7 @@ sig_hnd(int sig)
 static void
 siginfo(int signo, siginfo_t *info, void *context)
 {
-	fprintf(stdout, "%d %s %s\n", signo, context, strsignal(signo));
+	fprintf(stdout, "%d %s %s\n", signo, (char *) context, strsignal(signo));
 	fflush(stdout);
 	return ;
 }
