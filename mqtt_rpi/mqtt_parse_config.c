@@ -419,7 +419,7 @@ parse_configfile(const char *path, mqtt_global_cfg_t *myconfig)
 		}
 		switch (event.type) {
 			case YAML_STREAM_START_EVENT: 
-#define NEWTAB(x)	strncat(x, "\t", sizeof x)
+#define NEWTAB(x)	strncat(x, "\t", sizeof(x)-1)
 				NEWTAB(tabbuf);
 				dprintf("S-START %d\n", event.data.stream_start.encoding); 
 				break;
