@@ -57,6 +57,6 @@ struct sht30 *sht30_getdata(void)
 		dta->temperature = cTemp;
 		dta->humidity = humidity;
 	}
-	fclose(busfd);
+	close(busfd);
 	return (dta);
 }
