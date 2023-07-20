@@ -1,14 +1,16 @@
-// Distributed with a free-will license.
-// Use it any way you want, profit or free, provided it fits in the licenses of its associated works.
-// SHT30
-// This code is designed to work with the SHT30_I2CS I2C Mini Module available from ControlEverything.com.
-// https://www.controleverything.com/content/Humidity?sku=SHT30_I2CS#tabs-0-product_tabset-2
-
+/* 
+ * Distributed with a free-will license.
+ *  Use it any way you want, profit or free, provided it fits in the licenses of its associated works.
+ * SHT30
+ * This code is designed to work with the SHT30_I2CS I2C Mini Module available from ControlEverything.com.
+ * https://www.controleverything.com/content/Humidity?sku=SHT30_I2CS#tabs-0-product_tabset-2
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <linux/i2c-dev.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
+#include <unistd.h>
 
 #include "sht30.h"
 

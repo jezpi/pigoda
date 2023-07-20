@@ -1,5 +1,5 @@
 DFLAGS=-DPARSER_DEBUG -DMQTTDEBUG -DPTHREAD_PIR
-CFLAGS+=-g -W
+CFLAGS+=-g -W -Werror
 CC=gcc
 LDFLAGS=  -lmosquitto -lyaml -lwiringPi -lbsd -lpthread
 	

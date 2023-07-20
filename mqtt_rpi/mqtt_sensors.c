@@ -74,6 +74,7 @@ sensors_init(sensors_t *sn)
 					case I2C_SHT30:
 						sht30_init();
 						sp->s_st = SENS_OK;
+						break;
 					default:
 						return (-1);
 				}
