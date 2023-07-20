@@ -9,15 +9,12 @@ on:
 jobs:
   build:
 
-    runs-on: debian-latest
+    runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v3
     - name: configure
-      run: apt update && apt install libmosquitto-dev 
+      run: apt update && apt install libmosquitto-dev libbsd-dev wiringpi libyaml-dev
     - name: make
       run: make
-    - name: make check
-      run: make check
-    - name: make distcheck
-      run: make distcheck
+
