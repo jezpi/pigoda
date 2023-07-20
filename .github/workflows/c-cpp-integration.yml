@@ -14,7 +14,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: install dependencies
-      run: sudo apt update && sudo apt install libmosquitto-dev libbsd-dev wiringpi libyaml-dev
+      run: sudo apt update && sudo apt install libmosquitto-dev libbsd-dev wiringpi libyaml-dev libwiringpi-dev
     - name: make
       run: cd mqtt_rpi && make
 
