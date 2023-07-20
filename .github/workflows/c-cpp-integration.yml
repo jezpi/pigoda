@@ -13,8 +13,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: configure
-      run: apt update && apt install libmosquitto-dev libbsd-dev wiringpi libyaml-dev
+    - name: install dependencies
+      run: sudo apt update && sudo apt install libmosquitto-dev libbsd-dev wiringpi libyaml-dev
     - name: make
       run: make
 
